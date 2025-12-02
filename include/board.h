@@ -1,10 +1,21 @@
 #ifndef BOARD_H
 #define BOARD_H
 
+#include <dirent.h>
+
 #define MAX_MOVES 20
 #define MAX_LEVELS 20
 #define MAX_FILENAME 256
 #define MAX_GHOSTS 25
+#define MAXLINELENGTH 256
+#define MAXFILENAMELENGTH 20
+#define DIR_NAMESIZE 12
+#define FILE_DIR  "/info_files/"
+#define LEVEL ".lvl"
+#define PACMAN ".p"
+#define MONSTER ".m"
+#define TRUE 1
+#define FALSE 0
 
 typedef enum {
     REACHED_PORTAL = 1,
@@ -72,13 +83,13 @@ int move_ghost(board_t* board, int ghost_index, command_t* command);
 void kill_pacman(board_t* board, int pacman_index);
 
 /*Adds a pacman to the board*/
-int load_pacman(board_t* board, int points);
+void load_pacman(board_t* board, char* filename);
 
 /*Adds a ghost(monster) to the board*/
-int load_ghost(board_t* board);
+void load_ghost(board_t* board, char* filename, int num);
 
 /*Loads a level into board*/
-int load_level(board_t* board, int accumulated_points);
+int load_level(board_t* board, DIR* dir, int accumulated_points);
 
 /*Unloads levels loaded by load_level*/
 void unload_level(board_t * board);

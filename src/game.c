@@ -3,12 +3,16 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
 #define QUIT_GAME 2
 #define LOAD_BACKUP 3
 #define CREATE_BACKUP 4
+
+#define TRUE 1
+#define FALSE 0
 
 void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
@@ -84,8 +88,16 @@ int main(int argc, char** argv) {
     bool end_game = false;
     board_t game_board;
 
+    DIR* dir = opendir(FILE_DIR);
+    if (!dir) {
+        perror("Error opening directory");
+        exit(EXIT_FAILURE);
+    }
+
     while (!end_game) {
-        load_level(&game_board, accumulated_points);
+        if (load_level(&game_board, dir, accumulated_points) == FALSE) {
+            //End game
+        }
         draw_board(&game_board, DRAW_MENU);
         refresh_screen();
 
@@ -111,7 +123,9 @@ int main(int argc, char** argv) {
         }
         print_board(&game_board);
         unload_level(&game_board);
-    }    
+    }
+
+    closedir(dir);
 
     terminal_cleanup();
 
