@@ -95,9 +95,8 @@ int main(int argc, char** argv) {
     }
 
     while (!end_game) {
-        if (load_level(&game_board, dir, accumulated_points) == FALSE) {
-            //End game
-        }
+        load_static_level(&game_board, accumulated_points);
+
         draw_board(&game_board, DRAW_MENU);
         refresh_screen();
 

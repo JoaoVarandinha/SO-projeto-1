@@ -8,7 +8,6 @@
 #define MAX_FILENAME 256
 #define MAX_GHOSTS 25
 #define MAXLINELENGTH 256
-#define MAXFILENAMELENGTH 20
 #define DIR_NAMESIZE 12
 #define FILE_DIR  "/info_files/"
 #define LEVEL ".lvl"
@@ -82,14 +81,26 @@ int move_ghost(board_t* board, int ghost_index, command_t* command);
 /*Process the death of a Pacman*/
 void kill_pacman(board_t* board, int pacman_index);
 
-/*Adds a pacman to the board*/
-void load_pacman(board_t* board, char* filename);
 
-/*Adds a ghost(monster) to the board*/
-void load_ghost(board_t* board, char* filename, int num);
+/*Adds a static pacman to the board*/
+int load_static_pacman(board_t* board, int points);
 
-/*Loads a level into board*/
-int load_level(board_t* board, DIR* dir, int accumulated_points);
+/*Adds a file pacman to the board*/
+void load_file_pacman(board_t* board, char* filename);
+
+
+/*Adds a static ghost(monster) to the board*/
+int load_static_ghost(board_t* board);
+
+/*Adds a file ghost(monster) to the board*/
+void load_file_ghost(board_t* board, char* filename, int num);
+
+
+/*Loads a static level into board*/
+int load_static_level(board_t *board, int points);
+
+/*Loads a file level into the board*/
+int load_file_level(board_t *board, DIR* dir, int points);
 
 /*Unloads levels loaded by load_level*/
 void unload_level(board_t * board);

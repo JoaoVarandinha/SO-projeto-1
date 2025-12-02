@@ -335,20 +335,22 @@ void kill_pacman(board_t* board, int pacman_index) {
     pac->alive = 0;
 }
 
-//FINISH ME
-void load_pacman(board_t* board, char* filename) {
+// Static Loading
+int load_static_pacman(board_t* board, int points) {
     board->board[1 * board->width + 1].content = 'P'; // Pacman
     board->pacmans[0].pos_x = 1;
     board->pacmans[0].pos_y = 1;
     board->pacmans[0].alive = 1;
-    board->pacmans[0].points = 0;
-    return;
+    board->pacmans[0].points = points;
+    return 0;
+}
+//FINISH ME
+void load_file_pacman(board_t* board, char* filename) {
+
 }
 
-//FINISH ME
-void load_ghost(board_t* board, char* filename, int num) {
-
-
+// Static Loading
+int load_static_ghost(board_t* board) {
     // Ghost 0
     board->board[3 * board->width + 1].content = 'M'; // Monster
     board->ghosts[0].pos_x = 1;
@@ -365,8 +367,23 @@ void load_ghost(board_t* board, char* filename, int num) {
         board->ghosts[0].moves[i].command = 'A';
         board->ghosts[0].moves[i].turns = 1; 
     }
+
+    // Ghost 1
+    board->board[2 * board->width + 4].content = 'M'; // Monster
+    board->ghosts[1].pos_x = 4;
+    board->ghosts[1].pos_y = 2;
+    board->ghosts[1].passo = 1;
+    board->ghosts[1].waiting = 1;
+    board->ghosts[1].current_move = 0;
+    board->ghosts[1].n_moves = 1;
+    board->ghosts[1].moves[0].command = 'R'; // Random
+    board->ghosts[1].moves[0].turns = 1; 
     
-    return;
+    return 0;
+}
+//FINISH ME
+void load_file_ghost(board_t* board, char* filename, int num) {
+
 }
 
 //FINISH ME
@@ -401,7 +418,7 @@ void process_level_instruction(board_t* board, char* instruction) {
                 perror("Invalid pacman filename");
                 exit(EXIT_FAILURE);
             }
-            load_pacman(board, filename);
+            load_file_pacman(board, filename);
             break;
         }   
 
@@ -425,7 +442,7 @@ void process_level_instruction(board_t* board, char* instruction) {
             filename = strtok(instruction, " ");
             int counter = 0;
             while ((filename = strtok(NULL, " ")) != NULL) {
-                load_ghost(board, filename, counter);
+                load_file_ghost(board, filename, counter);
                 counter++;
             }
             break;
@@ -490,7 +507,7 @@ void process_instruction(board_t* board, char* instruction, char* filetype, int 
     }
 }
 
-void read_file(board_t* board, char filename[MAX_FILENAME], char* filetype, int num) {
+void read_file(board_t* board, char* filename, char* filetype, int num) {
     //Go to correct directory and find the file before opening it
     int file = open(filename, O_RDONLY);
     if (file == -1) {
@@ -546,7 +563,43 @@ void read_file(board_t* board, char filename[MAX_FILENAME], char* filetype, int 
 }
 
 
-int load_level(board_t *board, DIR* dir, int points) {
+int load_static_level(board_t *board, int points) {
+    board->height = 5;
+    board->width = 10;
+    board->tempo = 10;
+
+    board->n_ghosts = 2;
+    board->n_pacmans = 1;
+
+    board->board = calloc(board->width * board->height, sizeof(board_pos_t));
+    board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
+    board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
+
+    sprintf(board->level_name, "Static Level");
+
+    for (int i = 0; i < board->height; i++) {
+        for (int j = 0; j < board->width; j++) {
+            if (i == 0 || j == 0 || j == (board->width - 1)) {
+                board->board[i * board->width + j].content = 'W';
+            }
+            else if (i == 4 && j == 8) {
+                board->board[i * board->width + j].content = ' ';
+                board->board[i * board->width + j].has_portal = 1;
+            }
+            else {
+                board->board[i * board->width + j].content = ' ';
+                board->board[i * board->width + j].has_dot = 1;
+            }
+        }
+    }
+
+    load_static_ghost(board);
+    load_static_pacman(board, points);
+
+    return 0;
+}
+
+int load_file_level(board_t *board, DIR* dir, int points) {
     struct dirent* entry;
     int len;
 
@@ -570,33 +623,8 @@ int load_level(board_t *board, DIR* dir, int points) {
     read_file(board, filename, LEVEL, 0);
     strncpy(board->level_name, entry->d_name, len - 4);
 
-    
-
-    board->n_ghosts = 2;
-    board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
-    
-    
-
-
-    for (int i = 0; i < board->height; i++) {
-        for (int j = 0; j < board->width; j++) {
-            if (i == 0 || j == 0 || j == (board->width - 1)) {
-                board->board[i * board->width + j].content = 'W';
-            }
-            else if (i == 4 && j == 8) {
-                board->board[i * board->width + j].content = ' ';
-                board->board[i * board->width + j].has_portal = 1;
-            }
-            else {
-                board->board[i * board->width + j].content = ' ';
-                board->board[i * board->width + j].has_dot = 1;
-            }
-        }
-    }
-
-
-    return TRUE;
 }
+
 
 void unload_level(board_t * board) {
     free(board->board);
