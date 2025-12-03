@@ -353,7 +353,8 @@ void load_file_pacman(board_t* board, int points) {
         load_static_pacman(board, points);
     } else {
         board->pacmans[0].points = points;
-        read_file(board, board->pacman_file, PACMAN, 0);
+        int num = 0;
+        read_file(board, board->pacman_file, PACMAN, num);
     }
     return;
 }
@@ -404,7 +405,7 @@ void load_file_ghost(board_t* board) {
     return;
 }
 
-//FINISH ME
+
 void process_level_instruction(board_t* board, char* instruction, int* num) {
     switch (instruction[0]) {
 
@@ -461,7 +462,7 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
         }
     }
 }
-//FINISH ME
+
 void process_pacman_instruction(board_t* board, char* instruction) {
     switch (instruction[0]) {
         case 'P': {
@@ -471,25 +472,34 @@ void process_pacman_instruction(board_t* board, char* instruction) {
                     return;
                 }
                 case 'O': {
-                    sscanf(instruction, "POS %d %d", &board->pacmans[0].pos_x, &board->pacmans[0].pos_y);
+                    sscanf(instruction, "POS %d %d", &board->pacmans[0].pos_y, &board->pacmans[0].pos_x);
                     return;
                 }
             }
+            exit(EXIT_FAILURE);
         }
 
-        case 'T':
-
         case 'W':
-
         case 'A':
-
         case 'S':
-
         case 'D':
+        case 'T': {
+            command_t cmd;
+            cmd.command = instruction[0];
+            cmd.turns = 1;
+            cmd.turns_left = 1;
+            if (instruction[0] == 'T') {
+                sscanf(instruction, "T %d", &cmd.turns);
+                cmd.turns_left = cmd.turns;
+            }
 
+            board->pacmans[0].moves[board->pacmans[0].n_moves++] = cmd;
+
+            return;
+        }
     }
 }
-//FINISH ME
+
 void process_ghost_instruction(board_t* board, char* instruction, int num) {
     if (num < 0) {
         perror("Error creating ghost");
@@ -507,17 +517,27 @@ void process_ghost_instruction(board_t* board, char* instruction, int num) {
                     return;
                 }
             }
+            exit(EXIT_FAILURE);
         }
 
-        case 'T':
-
         case 'W':
-
         case 'A':
-
         case 'S':
-
         case 'D':
+        case 'T': {
+            command_t cmd;
+            cmd.command = instruction[0];
+            cmd.turns = 1;
+            cmd.turns_left = 1;
+            if (instruction[0] == 'T') {
+                sscanf(instruction, "T %d", &cmd.turns);
+                cmd.turns_left = cmd.turns;
+            }
+
+            board->ghosts[num].moves[board->ghosts[num].n_moves++] = cmd;
+
+            return;
+        }
 
     }
 }
