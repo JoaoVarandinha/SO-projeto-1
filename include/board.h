@@ -8,11 +8,10 @@
 #define MAX_FILENAME 256
 #define MAX_GHOSTS 25
 #define MAXLINELENGTH 256
-#define DIR_NAMESIZE 12
-#define FILE_DIR  "/info_files/"
+#define MAX_DIRLENGTH 256
 #define LEVEL ".lvl"
 #define PACMAN ".p"
-#define MONSTER ".m"
+#define GHOST ".m"
 #define TRUE 1
 #define FALSE 0
 
@@ -66,6 +65,7 @@ typedef struct {
     char level_name[256];   //name for the level file to keep track of which will be the next
     char pacman_file[256];  // file with pacman movements
     char ghosts_files[MAX_GHOSTS][256]; // files with monster movements
+    char dir_name[256];     // name of directory with info files
     int tempo;              // Duration of each play
 } board_t;
 
@@ -83,24 +83,24 @@ void kill_pacman(board_t* board, int pacman_index);
 
 
 /*Adds a static pacman to the board*/
-int load_static_pacman(board_t* board, int points);
+void load_static_pacman(board_t* board, int points);
 
 /*Adds a file pacman to the board*/
-void load_file_pacman(board_t* board, char* filename);
+void load_file_pacman(board_t* board, int points);
 
 
 /*Adds a static ghost(monster) to the board*/
-int load_static_ghost(board_t* board);
+void load_static_ghost(board_t* board);
 
 /*Adds a file ghost(monster) to the board*/
-void load_file_ghost(board_t* board, char* filename, int num);
+void load_file_ghost(board_t* board);
 
 
 /*Loads a static level into board*/
 int load_static_level(board_t *board, int points);
 
-/*Loads a file level into the board*/
-int load_file_level(board_t *board, DIR* dir, int points);
+/*Reads a file and processes it's instructions*/
+void read_file(board_t* board, char* filename, char* filetype, int num);
 
 /*Unloads levels loaded by load_level*/
 void unload_level(board_t * board);

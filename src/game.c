@@ -4,15 +4,13 @@
 #include <time.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <string.h>
 
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
 #define QUIT_GAME 2
 #define LOAD_BACKUP 3
 #define CREATE_BACKUP 4
-
-#define TRUE 1
-#define FALSE 0
 
 void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
@@ -71,60 +69,113 @@ int play_board(board_t * game_board) {
     return CONTINUE_PLAY;  
 }
 
+
 int main(int argc, char** argv) {
-    if (argc != 2) {
-        printf("Usage: %s <level_directory>\n", argv[0]);
-        // TODO receive inputs
-    }
-
-    // Random seed for any random movements
-    srand((unsigned int)time(NULL));
-
-    open_debug_file("debug.log");
-
-    terminal_init();
     
     int accumulated_points = 0;
     bool end_game = false;
     board_t game_board;
 
-    DIR* dir = opendir(FILE_DIR);
-    if (!dir) {
-        perror("Error opening directory");
-        exit(EXIT_FAILURE);
-    }
+    open_debug_file("debug.log");
 
-    while (!end_game) {
-        load_static_level(&game_board, accumulated_points);
+    terminal_init();
 
-        draw_board(&game_board, DRAW_MENU);
-        refresh_screen();
+    if (argc != 2) {
 
-        while(true) {
-            int result = play_board(&game_board); 
+        printf("Usage: %s <level_directory>\n", argv[0]);
+        
+        // Random seed for any random movements
+        srand((unsigned int)time(NULL));
 
-            if(result == NEXT_LEVEL) {
-                screen_refresh(&game_board, DRAW_WIN);
-                sleep_ms(game_board.tempo);
-                break;
+        while (!end_game) {
+            load_static_level(&game_board, accumulated_points);
+
+            draw_board(&game_board, DRAW_MENU);
+            refresh_screen();
+
+            while(true) {
+                int result = play_board(&game_board); 
+
+                if(result == NEXT_LEVEL) {
+                    screen_refresh(&game_board, DRAW_WIN);
+                    sleep_ms(game_board.tempo);
+                    break;
+                }
+
+                if(result == QUIT_GAME) {
+                    screen_refresh(&game_board, DRAW_GAME_OVER); 
+                    sleep_ms(game_board.tempo);
+                    end_game = true;
+                    break;
+                }
+        
+                screen_refresh(&game_board, DRAW_MENU); 
+
+                accumulated_points = game_board.pacmans[0].points;      
             }
-
-            if(result == QUIT_GAME) {
-                screen_refresh(&game_board, DRAW_GAME_OVER); 
-                sleep_ms(game_board.tempo);
-                end_game = true;
-                break;
-            }
-    
-            screen_refresh(&game_board, DRAW_MENU); 
-
-            accumulated_points = game_board.pacmans[0].points;      
+            print_board(&game_board);
+            unload_level(&game_board);
         }
-        print_board(&game_board);
-        unload_level(&game_board);
-    }
 
-    closedir(dir);
+    } else {
+
+        strcpy(game_board.dir_name, argv[1]);
+        
+        DIR* dir = opendir(argv[1]);
+        if (!dir) {
+            perror("Error opening directory");
+            exit(EXIT_FAILURE);
+        }
+        struct dirent* entry;
+        int len;
+
+        while (!end_game && (entry = readdir(dir)) != NULL) {
+            len = strlen(entry->d_name);
+            if (len <= 4 && strcmp(entry->d_name + len - 4, LEVEL) != 0) {
+                break;
+            }
+                
+            char filename[MAX_FILENAME + MAX_DIRLENGTH];
+            snprintf(filename, sizeof(filename), "%s%s", argv[1], entry->d_name);
+            strcpy(game_board.pacman_file, "");
+            strcpy(game_board.ghosts_files[0], "");
+            
+            read_file(&game_board, filename, LEVEL, 0);
+            strcpy(game_board.level_name, entry->d_name);
+
+            load_file_pacman(&game_board,accumulated_points);
+            load_file_ghost(&game_board);
+            
+            draw_board(&game_board, DRAW_MENU);
+            refresh_screen();
+    
+            while(true) {
+                int result = play_board(&game_board); 
+    
+                if(result == NEXT_LEVEL) {
+                    screen_refresh(&game_board, DRAW_WIN);
+                    sleep_ms(game_board.tempo);
+                    break;
+                }
+    
+                if(result == QUIT_GAME) {
+                    screen_refresh(&game_board, DRAW_GAME_OVER); 
+                    sleep_ms(game_board.tempo);
+                    end_game = true;
+                    break;
+                }
+        
+                screen_refresh(&game_board, DRAW_MENU); 
+    
+                accumulated_points = game_board.pacmans[0].points;      
+            }
+            
+            print_board(&game_board);
+            unload_level(&game_board);
+            
+        }
+        closedir(dir);
+    }
 
     terminal_cleanup();
 
