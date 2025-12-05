@@ -1,2 +1,4 @@
 /obj
 /bin
+/info_files
+*.log

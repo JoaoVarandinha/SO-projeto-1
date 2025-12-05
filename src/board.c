@@ -352,9 +352,12 @@ void load_file_pacman(board_t* board, int points) {
     if (strcmp(board->pacman_file, "") == 0) {
         load_static_pacman(board, points);
     } else {
-        board->pacmans[0].points = points;
+        pacman_t* pac = & board->pacmans[0];
+        pac->points = points;
+        pac->alive = 1;
         int num = 0;
         read_file(board, board->pacman_file, PACMAN, num);
+        board->board[pac->pos_y * board->width + pac->pos_x].content = 'P';
     }
     return;
 }
@@ -400,6 +403,8 @@ void load_file_ghost(board_t* board) {
     } else {
         for (int i = 0; i < board->n_ghosts; i++) {
             read_file(board, board->ghosts_files[i], GHOST, i);
+            ghost_t* ghost = &board->ghosts[i];
+            board->board[ghost->pos_y * board->width + ghost->pos_x].content = 'M';
         }
     }
     return;
@@ -440,22 +445,18 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
             return;
         }
 
-        case 'X':
-        case 'o':
-        case '@': {
+        default: {
             for (int i = 0; i < board->width; i++) {
-                board_pos_t pos;
                 switch (instruction[i]) {
-                    case 'W': pos.content = 'W';
+                    case 'X': board->board[(*num) * board->width + i].content = 'W';
                               break;
-                    case 'o': pos.content = ' ';
-                              pos.has_dot = TRUE;
+                    case 'o': board->board[(*num) * board->width + i].content = ' ';
+                              board->board[(*num) * board->width + i].has_dot = TRUE;
                               break;
-                    case '@': pos.content = ' ';
-                              pos.has_portal = TRUE;
+                    case '@': board->board[(*num) * board->width + i].content = ' ';
+                              board->board[(*num) * board->width + i].has_portal = TRUE;
                               break;
                 }
-                board->board[*num * board->width + i] = pos;
             }
             (*num)++;
             return;
@@ -464,26 +465,23 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
 }
 
 void process_pacman_instruction(board_t* board, char* instruction) {
+    pacman_t* pac = &board->pacmans[0];
     switch (instruction[0]) {
         case 'P': {
             switch (instruction[1]) {
                 case 'A': {
-                    sscanf(instruction, "PASSO %d", &board->pacmans[0].passo);
+                    sscanf(instruction, "PASSO %d", &pac->passo);
                     return;
                 }
                 case 'O': {
-                    sscanf(instruction, "POS %d %d", &board->pacmans[0].pos_y, &board->pacmans[0].pos_x);
+                    sscanf(instruction, "POS %d %d", &pac->pos_x, &pac->pos_y);
                     return;
                 }
             }
             exit(EXIT_FAILURE);
         }
 
-        case 'W':
-        case 'A':
-        case 'S':
-        case 'D':
-        case 'T': {
+        default: {
             command_t cmd;
             cmd.command = instruction[0];
             cmd.turns = 1;
@@ -493,7 +491,7 @@ void process_pacman_instruction(board_t* board, char* instruction) {
                 cmd.turns_left = cmd.turns;
             }
 
-            board->pacmans[0].moves[board->pacmans[0].n_moves++] = cmd;
+            pac->moves[pac->n_moves++] = cmd;
 
             return;
         }
@@ -501,19 +499,16 @@ void process_pacman_instruction(board_t* board, char* instruction) {
 }
 
 void process_ghost_instruction(board_t* board, char* instruction, int num) {
-    if (num < 0) {
-        perror("Error creating ghost");
-        exit(EXIT_FAILURE);
-    }
+    ghost_t* ghost = &board->ghosts[num];
     switch (instruction[0]) {
         case 'P': {
             switch (instruction[1]) {
                 case 'A': {
-                    sscanf(instruction, "PASSO %d", &board->ghosts[num].passo);
+                    sscanf(instruction, "PASSO %d", &ghost->passo);
                     return;
                 }
                 case 'O': {
-                    sscanf(instruction, "POS %d %d", &board->ghosts[num].pos_x, &board->ghosts[num].pos_y);
+                    sscanf(instruction, "POS %d %d", &ghost->pos_x, &ghost->pos_y);
                     return;
                 }
             }
@@ -534,7 +529,7 @@ void process_ghost_instruction(board_t* board, char* instruction, int num) {
                 cmd.turns_left = cmd.turns;
             }
 
-            board->ghosts[num].moves[board->ghosts[num].n_moves++] = cmd;
+            ghost->moves[ghost->n_moves++] = cmd;
 
             return;
         }
@@ -542,19 +537,20 @@ void process_ghost_instruction(board_t* board, char* instruction, int num) {
     }
 }
 
-void process_instruction(board_t* board, char* instruction, char* filetype, int num) {
-    if (instruction[0] == '#') return;
+void process_instruction(board_t* board, char* instruction, char* filetype, int* num) {
+    if (instruction[0] == '#' || strcmp(instruction, "") == 0) return;
 
     switch (filetype[1]) {
-        case 'l': process_level_instruction(board, instruction, &num); return;
+        case 'l': process_level_instruction(board, instruction, num); return;
         case 'p': process_pacman_instruction(board, instruction); return;
-        case 'm': process_ghost_instruction(board, instruction, num); return;
+        case 'm': process_ghost_instruction(board, instruction, *num); return;
     }
 }
 
 void read_file(board_t* board, char* filename, char* filetype, int num) {
     //Go to correct directory and find the file before opening it
-    char* dirfilename = strcat(board->dir_name, filename);
+    char dirfilename[MAX_FILENAME + MAX_DIRLENGTH];
+    sprintf(dirfilename, "%s%s", board->dir_name, filename);
     int file = open(dirfilename, O_RDONLY);
     if (file == -1) {
         perror("Error opening file");
@@ -563,7 +559,7 @@ void read_file(board_t* board, char* filename, char* filetype, int num) {
 
     ssize_t bytesRead;
     char buf[MAXLINELENGTH]; //Initialize buffer
-    char instruction[MAXLINELENGTH];
+    char instruction[MAXLINELENGTH + MAXLINELENGTH];
     char leftovers[MAXLINELENGTH] = ""; //Initialize leftovers buffer
     int len = sizeof(buf) - 1; //Get amount of bytes to read
     while (TRUE) {
@@ -588,7 +584,7 @@ void read_file(board_t* board, char* filename, char* filetype, int num) {
                 strcpy(instruction, leftovers); //Copy the previous leftovers
                 strncat(instruction, buf + start, i - start); //Append the new token to the leftovers
 
-                process_instruction(board, instruction, filetype, num); //Process the instruction
+                process_instruction(board, instruction, filetype, &num); //Process the instruction
 
                 leftovers[0] = '\0'; //Reset leftovers from previous buffer
                 start = i + 1; //Move to next token
@@ -603,7 +599,7 @@ void read_file(board_t* board, char* filename, char* filetype, int num) {
     }
 
     if (leftovers[0] != '\0') { //Check for leftovers after file ends
-        process_instruction(board, leftovers, filetype, num); //Process leftovers
+        process_instruction(board, leftovers, filetype, &num); //Process leftovers
     }
     close(file);
 }

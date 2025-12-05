@@ -45,6 +45,10 @@ int play_board(board_t * game_board) {
         return QUIT_GAME;
     }
 
+    if (play->command == 'G') {
+        return 0;
+    }
+
     int result = move_pacman(game_board, 0, play);
     if (result == REACHED_PORTAL) {
         // Next level
@@ -71,7 +75,6 @@ int play_board(board_t * game_board) {
 
 
 int main(int argc, char** argv) {
-    
     int accumulated_points = 0;
     bool end_game = false;
     board_t game_board;
@@ -120,7 +123,6 @@ int main(int argc, char** argv) {
     } else {
 
         strcpy(game_board.dir_name, argv[1]);
-        
         DIR* dir = opendir(argv[1]);
         if (!dir) {
             perror("Error opening directory");
@@ -135,12 +137,10 @@ int main(int argc, char** argv) {
                 break;
             }
                 
-            char filename[MAX_FILENAME + MAX_DIRLENGTH];
-            snprintf(filename, sizeof(filename), "%s%s", argv[1], entry->d_name);
             strcpy(game_board.pacman_file, "");
             strcpy(game_board.ghosts_files[0], "");
             
-            read_file(&game_board, filename, LEVEL, 0);
+            read_file(&game_board, entry->d_name, LEVEL, 0);
             strcpy(game_board.level_name, entry->d_name);
 
             load_file_pacman(&game_board,accumulated_points);

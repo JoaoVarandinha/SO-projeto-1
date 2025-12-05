@@ -37,7 +37,7 @@ $(BIN_DIR)/$(TARGET): $(OBJS) | folders
 
 # run the program
 run: pacmanist
-	@./$(BIN_DIR)/$(TARGET) info_files
+	@./$(BIN_DIR)/$(TARGET) ./info_files/
 
 # Create folders
 folders:
