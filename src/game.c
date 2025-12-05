@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
         while (!end_game && (entry = readdir(dir)) != NULL) {
             len = strlen(entry->d_name);
             if (len <= 4 && strcmp(entry->d_name + len - 4, LEVEL) != 0) {
-                break;
+               continue;
             }
                 
             strcpy(game_board.pacman_file, "");
