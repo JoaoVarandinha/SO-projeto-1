@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
@@ -27,7 +29,7 @@ int play_board(board_t * game_board) {
         command_t c; 
         c.command = get_input();
 
-        if(c.command == '\0')
+        if (c.command == '\0')
             return CONTINUE_PLAY;
 
         c.turns = 1;
@@ -46,7 +48,8 @@ int play_board(board_t * game_board) {
     }
 
     if (play->command == 'G') {
-        return 0;
+        pacman->current_move++;
+        return CREATE_BACKUP;
     }
 
     int result = move_pacman(game_board, 0, play);
@@ -55,7 +58,7 @@ int play_board(board_t * game_board) {
         return NEXT_LEVEL;
     }
 
-    if(result == DEAD_PACMAN) {
+    if (result == DEAD_PACMAN) {
         return QUIT_GAME;
     }
     
@@ -77,7 +80,11 @@ int play_board(board_t * game_board) {
 int main(int argc, char** argv) {
     int accumulated_points = 0;
     bool end_game = false;
+    bool has_backup = false;
     board_t game_board;
+
+    // Random seed for any random movements
+    srand((unsigned int)time(NULL));
 
     open_debug_file("debug.log");
 
@@ -86,9 +93,6 @@ int main(int argc, char** argv) {
     if (argc != 2) {
 
         printf("Usage: %s <level_directory>\n", argv[0]);
-        
-        // Random seed for any random movements
-        srand((unsigned int)time(NULL));
 
         while (!end_game) {
             load_static_level(&game_board, accumulated_points);
@@ -152,17 +156,37 @@ int main(int argc, char** argv) {
             while(true) {
                 int result = play_board(&game_board); 
     
-                if(result == NEXT_LEVEL) {
+                if (result == NEXT_LEVEL) {
                     screen_refresh(&game_board, DRAW_WIN);
                     sleep_ms(game_board.tempo);
                     break;
                 }
     
-                if(result == QUIT_GAME) {
+                if (result == QUIT_GAME) {
                     screen_refresh(&game_board, DRAW_GAME_OVER); 
                     sleep_ms(game_board.tempo);
                     end_game = true;
+                    if (has_backup) return 0;
                     break;
+                }
+
+                if (result == CREATE_BACKUP) {
+                    if (!has_backup) {
+                        pid_t pid = fork();
+                        switch (pid) {
+                            case -1:
+                                perror("Error forking");
+                                exit(EXIT_FAILURE);
+                            case 0:
+                                has_backup = true;
+                                break;
+                            default:
+                                int status;
+                                wait(&status);
+                                break;
+                        }
+                    }
+                    
                 }
         
                 screen_refresh(&game_board, DRAW_MENU); 
