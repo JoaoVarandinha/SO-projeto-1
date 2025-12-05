@@ -485,7 +485,6 @@ void process_pacman_instruction(board_t* board, char* instruction) {
             command_t cmd;
             cmd.command = instruction[0];
             cmd.turns = 1;
-            cmd.turns_left = 1;
             if (instruction[0] == 'T') {
                 sscanf(instruction, "T %d", &cmd.turns);
                 cmd.turns_left = cmd.turns;
@@ -523,7 +522,6 @@ void process_ghost_instruction(board_t* board, char* instruction, int num) {
             command_t cmd;
             cmd.command = instruction[0];
             cmd.turns = 1;
-            cmd.turns_left = 1;
             if (instruction[0] == 'T') {
                 sscanf(instruction, "T %d", &cmd.turns);
                 cmd.turns_left = cmd.turns;
