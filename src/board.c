@@ -561,7 +561,7 @@ void read_file(board_t* board, char* filename, char* filetype, int num) {
     char buf[MAXLINELENGTH]; //Initialize buffer
     char instruction[MAXLINELENGTH + MAXLINELENGTH];
     char leftovers[MAXLINELENGTH] = ""; //Initialize leftovers buffer
-    int len = sizeof(buf) - 1; //Get amount of bytes to read
+    int len = sizeof(buf); //Get amount of bytes to read
     while (TRUE) {
         int done = 0; //Set read bytes to 0
         while (done < len) { //Read until buffer is full or EOF is reached
@@ -592,9 +592,10 @@ void read_file(board_t* board, char* filename, char* filetype, int num) {
         }
 
         if (start < done) { // Check for leftovers
-            int leftover_len = done - start; //Get the length of the leftovers
-            strncpy(leftovers, buf + start, leftover_len); //Copy the leftovers to the leftovers variable
-            leftovers[leftover_len] = '\0'; //Add null terminator
+            int curr_leftover_len = strlen(leftovers);
+            int new_leftover_len = done - start; //Get the length of the leftovers
+            strncat(leftovers, buf + start, new_leftover_len); //Copy the leftovers to the leftovers variable
+            leftovers[curr_leftover_len + new_leftover_len] = '\0'; //Add null terminator
         }
     }
 
