@@ -642,7 +642,9 @@ int load_static_level(board_t *board, int points) {
 
 void unload_level(board_t * board) {
     free(board->board);
+    board->n_pacmans = 0;
     free(board->pacmans);
+    board->n_ghosts = 0;
     free(board->ghosts);
 }
 
