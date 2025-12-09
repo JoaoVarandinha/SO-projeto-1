@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <pthread.h>
 
 #define CONTINUE_PLAY 0
 #define NEXT_LEVEL 1
@@ -18,7 +19,7 @@ void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
     draw_board(game_board, mode);
     refresh_screen();
-    if(game_board->tempo != 0)
+    if (game_board->tempo != 0)
         sleep_ms(game_board->tempo);       
 }
 
@@ -61,7 +62,7 @@ int play_board(board_t * game_board) {
     if (result == DEAD_PACMAN) {
         return QUIT_GAME;
     }
-    
+
     for (int i = 0; i < game_board->n_ghosts; i++) {
         ghost_t* ghost = &game_board->ghosts[i];
         // avoid buffer overflow wrapping around with modulo of n_moves
@@ -100,16 +101,16 @@ int main(int argc, char** argv) {
             draw_board(&game_board, DRAW_MENU);
             refresh_screen();
 
-            while(true) {
+            while (true) {
                 int result = play_board(&game_board); 
 
-                if(result == NEXT_LEVEL) {
+                if (result == NEXT_LEVEL) {
                     screen_refresh(&game_board, DRAW_WIN);
                     sleep_ms(game_board.tempo);
                     break;
                 }
 
-                if(result == QUIT_GAME) {
+                if (result == QUIT_GAME) {
                     screen_refresh(&game_board, DRAW_GAME_OVER); 
                     sleep_ms(game_board.tempo);
                     end_game = true;
@@ -140,22 +141,22 @@ int main(int argc, char** argv) {
             if (len <= 4 && strcmp(entry->d_name + len - 4, LEVEL) != 0) {
                continue;
             }
-                
+
             strcpy(game_board.pacman_file, "");
             strcpy(game_board.ghosts_files[0], "");
-            
+
             read_file(&game_board, entry->d_name, LEVEL, 0);
             strcpy(game_board.level_name, entry->d_name);
 
             load_file_pacman(&game_board,accumulated_points);
             load_file_ghost(&game_board);
-            
+
             draw_board(&game_board, DRAW_MENU);
             refresh_screen();
-    
+
             while(true) {
                 int result = play_board(&game_board); 
-    
+
                 if (result == NEXT_LEVEL) {
                     screen_refresh(&game_board, DRAW_WIN);
                     sleep_ms(game_board.tempo);
@@ -186,11 +187,10 @@ int main(int argc, char** argv) {
                                 break;
                         }
                     }
-                    
                 }
-        
+
                 screen_refresh(&game_board, DRAW_MENU); 
-    
+
                 accumulated_points = game_board.pacmans[0].points;      
             }
             
