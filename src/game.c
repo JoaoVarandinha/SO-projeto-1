@@ -81,7 +81,7 @@ int play_board(board_t * game_board) {
 int main(int argc, char** argv) {
     int accumulated_points = 0;
     bool end_game = false;
-    bool has_backup = false;
+    pid_t pid = -1;
     board_t game_board;
 
     // Random seed for any random movements
@@ -138,9 +138,7 @@ int main(int argc, char** argv) {
 
         while (!end_game && (entry = readdir(dir)) != NULL) {
             len = strlen(entry->d_name);
-            if (len <= 4 && strcmp(entry->d_name + len - 4, LEVEL) != 0) {
-               continue;
-            }
+            if (len <= 4 && strcmp(entry->d_name + len - 4, LEVEL) != 0) continue;
 
             strcpy(game_board.pacman_file, "");
             strcpy(game_board.ghosts_files[0], "");
@@ -164,27 +162,46 @@ int main(int argc, char** argv) {
                 }
     
                 if (result == QUIT_GAME) {
+                    if (pid == 0) {
+                        if (game_board.pacmans[0].alive) {
+                            exit(QUIT_GAME);
+                        } else {
+                            screen_refresh(&game_board, DRAW_GAME_OVER); 
+                            sleep_ms(game_board.tempo);
+                            exit(LOAD_BACKUP);
+                        }
+                    }
                     screen_refresh(&game_board, DRAW_GAME_OVER); 
                     sleep_ms(game_board.tempo);
                     end_game = true;
-                    if (has_backup) return 0;
                     break;
                 }
 
                 if (result == CREATE_BACKUP) {
-                    if (!has_backup) {
-                        pid_t pid = fork();
-                        switch (pid) {
-                            case -1:
+                    if (pid) {
+                        pid = fork();
+                        if (pid == -1) {
                                 perror("Error forking");
                                 exit(EXIT_FAILURE);
-                            case 0:
-                                has_backup = true;
-                                break;
-                            default:
-                                int status;
-                                wait(&status);
-                                break;
+                        } else if (pid == 0) {
+                            screen_refresh(&game_board, DRAW_MENU);
+                            sleep_ms(game_board.tempo);
+                            continue;
+                        } else {
+                            int status;
+                            wait(&status);
+                            if (WIFEXITED(status)) {
+                                if (WEXITSTATUS(status) == QUIT_GAME) {
+                                    end_game = true;
+                                    break; 
+                                } else if (WEXITSTATUS(status) == LOAD_BACKUP) {
+                                    screen_refresh(&game_board, DRAW_MENU);
+                                    sleep_ms(game_board.tempo);
+                                    continue;
+                                }
+                            }
+                            perror("Error waiting for child");
+                            exit(EXIT_FAILURE);
                         }
                     }
                 }
@@ -198,6 +215,9 @@ int main(int argc, char** argv) {
             unload_level(&game_board);
             
         }
+
+        if (pid == 0) exit(QUIT_GAME);
+
         closedir(dir);
     }
 
