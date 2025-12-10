@@ -30,9 +30,14 @@ void screen_refresh(board_t * game_board, int mode) {
 
 void *display_thread(void* arg) {
     board_t *board = (board_t*)arg;
-    pthread_rwlock_rdlock(&board->board_lock);
-    screen_refresh(board, DRAW_MENU);
+    pthread_rwlock_wrlock(&board->board_lock);
+    debug("REFRESH\n");
+    draw_board(board, DRAW_MENU);
+    refresh_screen();
     pthread_rwlock_unlock(&board->board_lock);
+
+    if (board->tempo != 0)
+        sleep_ms(board->tempo); 
 
     return NULL;
 }
@@ -41,8 +46,9 @@ void *pacman_thread(void* arg) {
     board_t* board = (board_t*)arg;
     pacman_t* pacman = &board->pacmans[0];
 
-
     while (true) {
+        if (board->level_cmd != CONTINUE_PLAY) return NULL;
+
         command_t* play;
         command_t c;
         if (pacman->n_moves == 0) { // if is user input
@@ -88,7 +94,7 @@ void *pacman_thread(void* arg) {
         }
 
         board->level_cmd = CONTINUE_PLAY;
-        
+
     }
     return NULL;
 }
@@ -99,13 +105,14 @@ void *ghost_thread(void* arg) {
     ghost_t* ghost = &board->ghosts[args->ghost_idx];
 
     while (true) {
+        if (board->level_cmd != CONTINUE_PLAY) return
         move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
     }
     
     return NULL;
 }
 
-int play_board(board_t * game_board) {
+int play_board(board_t* game_board) {
     pacman_t* pacman = &game_board->pacmans[0];
     command_t* play;
     command_t c;
@@ -160,12 +167,25 @@ int play_board(board_t * game_board) {
     return CONTINUE_PLAY;  
 }
 
+int play_board_threads(board_t* board) {
+    pthread_create(&display_tid, NULL, display_thread, &game_board);
+    pthread_create(&pac_tid, NULL, pacman_thread, &game_board); //Start pacman thread
+    for (int i = 0; i < game_board.n_ghosts; i++) {
+        ghost_thread_args* args = calloc(1, sizeof(*args));
+
+        args->board = &game_board;
+        args->ghost_idx = i;
+
+        pthread_create(&ghost_tid[i], NULL, ghost_thread, args);
+    }
+}
 
 int main(int argc, char** argv) {
     int accumulated_points = 0;
     bool end_game = false;
     pid_t pid = -1;
     board_t game_board;
+    game_board.level_cmd = CONTINUE_PLAY;
 
     // Random seed for any random movements
     srand((unsigned int)time(NULL));
@@ -218,45 +238,36 @@ int main(int argc, char** argv) {
         }
         struct dirent* entry;
         int len;
+        pthread_t display_tid, pac_tid, ghost_tid[MAX_GHOSTS];
+        pthread_rwlock_init(&game_board.board_lock, NULL);
 
+        
         while (!end_game && (entry = readdir(dir)) != NULL) {
             len = strlen(entry->d_name);
             if (len <= 4 || strcmp(entry->d_name + len - 4, LEVEL) != 0) continue;
-
+            
             strcpy(game_board.pacman_file, "");
             strcpy(game_board.ghosts_files[0], "");
-
+            
             read_file(&game_board, entry->d_name, LEVEL, 0);
             strcpy(game_board.level_name, entry->d_name);
-
+            
             load_file_pacman(&game_board,accumulated_points);
             load_file_ghost(&game_board);
-
+            
             draw_board(&game_board, DRAW_MENU);
             refresh_screen();
-
-            pthread_t pac_tid, ghost_tid[MAX_GHOSTS];
-
-            pthread_create(&pac_tid, NULL, pacman_thread, &game_board); //Start pacman thread
-            for (int i = 0; i < game_board.n_ghosts; i++) {
-                ghost_thread_args* args = calloc(1, sizeof(*args));
-
-                args->board = &game_board;
-                args->ghost_idx = i;
-
-                pthread_create(&ghost_tid[i], NULL, ghost_thread, args);
-            }
-
+            
+            
             while(true) {
-                int result = play_board(&game_board); 
 
-                if (result == NEXT_LEVEL) {
+                if (game_board.level_cmd == NEXT_LEVEL) {
                     screen_refresh(&game_board, DRAW_WIN);
                     sleep_ms(game_board.tempo);
                     break;
                 }
     
-                if (result == QUIT_GAME) {
+                if (game_board.level_cmd == QUIT_GAME) {
                     if (pid == 0) {
                         if (game_board.pacmans[0].alive) {
                             exit(QUIT_GAME);
@@ -270,7 +281,7 @@ int main(int argc, char** argv) {
                     break;
                 }
 
-                if (result == CREATE_BACKUP) {
+                if (game_board.level_cmd == CREATE_BACKUP) {
                     if (pid) {
                         pid = fork();
                         if (pid == -1) {
@@ -299,17 +310,26 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                screen_refresh(&game_board, DRAW_MENU); 
-
-                accumulated_points = game_board.pacmans[0].points;      
+                sleep(game_board.tempo);
             }
+
+            accumulated_points = game_board.pacmans[0].points;
             
             print_board(&game_board);
             unload_level(&game_board);
-            
-        }
 
-        if (pid == 0) exit(QUIT_GAME);
+            if (pid == 0) exit(QUIT_GAME);
+    
+            pthread_join(display_tid, NULL);
+            pthread_join(pac_tid, NULL);
+            for (int i = 0; i < game_board.n_ghosts; i++) {
+                pthread_join(ghost_tid[i], NULL);
+            }
+
+            for (int i = 0; i < game_board.width * game_board.height; i++) {
+                pthread_mutex_destroy(&game_board.board[i].pos_lock);
+            }
+        }
 
         closedir(dir);
     }

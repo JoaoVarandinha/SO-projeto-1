@@ -15,7 +15,6 @@ POS 1 1
 T 1
 D
 D
-G
 S
 S
 D

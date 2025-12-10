@@ -12,7 +12,8 @@ POS 4 4
 # Todos os comandos após PASSO e POS são executados em ciclo infinito.
 # Os comandos possíveis são A (esq.), D (dir.), W (cima.), S (baixo)
 # R (direcção aleatória), T (espera um número de jogadas), C (carregar)
+A
 W
 A
-A
-A
+S
+D

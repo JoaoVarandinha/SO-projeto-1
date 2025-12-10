@@ -1,7 +1,7 @@
 # Compiler variables
 CC = gcc
 CFLAGS = -g -Wall -Wextra -Werror -std=c17 -D_POSIX_C_SOURCE=200809L
-CFLAGS += -fsanitize=thread
+#CFLAGS += -fsanitize=thread
 LDFLAGS = -lncurses
 
 # Directory variables
@@ -38,7 +38,7 @@ $(BIN_DIR)/$(TARGET): $(OBJS) | folders
 
 # run the program
 run: pacmanist
-	@./$(BIN_DIR)/$(TARGET) ./info_files/
+	@./$(BIN_DIR)/$(TARGET) info_files/
 
 # Create folders
 folders:

@@ -99,6 +99,17 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
 
     int new_index = get_board_index(board, new_x, new_y);
     int old_index = get_board_index(board, pac->pos_x, pac->pos_y);
+
+
+    pthread_rwlock_rdlock(&board->board_lock);
+    if (new_index < old_index) {
+        pthread_mutex_lock(&board->board[new_index].pos_lock);
+        pthread_mutex_lock(&board->board[old_index].pos_lock);
+    } else {
+        pthread_mutex_lock(&board->board[old_index].pos_lock);
+        pthread_mutex_lock(&board->board[new_index].pos_lock);
+    }
+
     char target_content = board->board[new_index].content;
 
     if (board->board[new_index].has_portal) {
@@ -128,6 +139,10 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     pac->pos_x = new_x;
     pac->pos_y = new_y;
     board->board[new_index].content = 'P';
+
+    pthread_mutex_unlock(&board->board[new_index].pos_lock);
+    pthread_mutex_unlock(&board->board[old_index].pos_lock);
+    pthread_rwlock_unlock(&board->board_lock);
 
     return VALID_MOVE;
 }
@@ -299,6 +314,16 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     // Check board position
     int new_index = get_board_index(board, new_x, new_y);
     int old_index = get_board_index(board, ghost->pos_x, ghost->pos_y);
+
+    pthread_rwlock_rdlock(&board->board_lock);
+    if (new_index < old_index) {
+        pthread_mutex_lock(&board->board[new_index].pos_lock);
+        pthread_mutex_lock(&board->board[old_index].pos_lock);
+    } else {
+        pthread_mutex_lock(&board->board[old_index].pos_lock);
+        pthread_mutex_lock(&board->board[new_index].pos_lock);
+    }
+
     char target_content = board->board[new_index].content;
 
     // Check for walls and ghosts
@@ -321,6 +346,11 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
 
     // Update board - set new position
     board->board[new_index].content = 'M';
+
+    pthread_mutex_unlock(&board->board[new_index].pos_lock);
+    pthread_mutex_unlock(&board->board[old_index].pos_lock);
+    pthread_rwlock_unlock(&board->board_lock);
+
     return result;
 }
 
@@ -339,9 +369,13 @@ void kill_pacman(board_t* board, int pacman_index) {
 
 // Static Loading
 void load_static_pacman(board_t* board, int points) {
-    board->board[1 * board->width + 1].content = 'P'; // Pacman
-    board->pacmans[0].pos_x = 1;
-    board->pacmans[0].pos_y = 1;
+    int i;
+    for (i = 0; i < board->width * board->height; i++) {
+            if (board->board[i].content == ' ' && board->board[i].has_dot) break;
+    }
+    board->board[i].content = 'P'; // Pacman
+    board->pacmans[0].pos_x = i / board->width;
+    board->pacmans[0].pos_y = i % board->width;
     board->pacmans[0].alive = 1;
     board->pacmans[0].points = points;
     return;
