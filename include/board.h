@@ -38,6 +38,7 @@ typedef struct {
     int current_move;
     int n_moves; // number of predefined moves, 0 if controlled by user, >0 if readed from level file
     int waiting;
+    pthread_rwlock_t pac_lock;
 } pacman_t;
 
 typedef struct {
@@ -48,6 +49,7 @@ typedef struct {
     int current_move;
     int waiting;
     int charged;
+    pthread_rwlock_t ghost_lock;
 } ghost_t;
 
 typedef struct {
@@ -56,6 +58,12 @@ typedef struct {
     int has_portal; // whether there is a portal in this position or not
     pthread_mutex_t pos_lock;
 } board_pos_t;
+
+typedef struct {
+    int running;
+    int result;
+    pthread_rwlock_t info_lock;
+} game_info;
 
 typedef struct {
     int width, height;      // dimensions of the board
@@ -69,8 +77,8 @@ typedef struct {
     char ghosts_files[MAX_GHOSTS][MAX_FILENAME]; // files with monster movements
     char dir_name[MAX_DIRLENGTH];     // name of directory with info files
     int tempo;              // Duration of each play
-    int level_cmd;
     pthread_rwlock_t board_lock;
+    game_info info;
 } board_t;
 
 /*Makes the current thread sleep for 'int milliseconds' miliseconds*/

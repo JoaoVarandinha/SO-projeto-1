@@ -42,9 +42,11 @@ void sleep_ms(int milliseconds) {
 }
 
 int move_pacman(board_t* board, int pacman_index, command_t* command) {
+    pthread_rwlock_rdlock(&board->board_lock);
     if (pacman_index < 0 || !board->pacmans[pacman_index].alive) {
         return DEAD_PACMAN; // Invalid or dead pacman
     }
+    pthread_rwlock_unlock(&board->board_lock);
 
     pacman_t* pac = &board->pacmans[pacman_index];
     int new_x = pac->pos_x;
@@ -389,6 +391,7 @@ void load_file_pacman(board_t* board, int points) {
         pacman_t* pac = &board->pacmans[0];
         pac->points = points;
         pac->alive = 1;
+        pthread_rwlock_init(&pac->pac_lock, NULL);
         read_file(board, board->pacman_file, PACMAN, 0);
         board->board[pac->pos_y * board->width + pac->pos_x].content = 'P';
     }
@@ -437,6 +440,7 @@ void load_file_ghost(board_t* board) {
         for (int i = 0; i < board->n_ghosts; i++) {
             read_file(board, board->ghosts_files[i], GHOST, i);
             ghost_t* ghost = &board->ghosts[i];
+            pthread_rwlock_init(&ghost->ghost_lock, NULL);
             board->board[ghost->pos_y * board->width + ghost->pos_x].content = 'M';
         }
     }

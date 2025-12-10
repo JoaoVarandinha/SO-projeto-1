@@ -28,17 +28,39 @@ void screen_refresh(board_t * game_board, int mode) {
         sleep_ms(game_board->tempo);       
 }
 
+void set_result(board_t* board, int res) {
+    game_info* info = &board->info;
+
+    pthread_rwlock_wrlock(&info->info_lock);
+    info->result = res;
+    pthread_rwlock_unlock(&info->info_lock);
+}
+
+int check_result(board_t* board) {
+    game_info* info = &board->info;
+
+    pthread_rwlock_rdlock(&info->info_lock);
+    int res = info->result;
+    pthread_rwlock_unlock(&info->info_lock);
+
+    return res;
+}
+
 void *display_thread(void* arg) {
     board_t *board = (board_t*)arg;
-    pthread_rwlock_wrlock(&board->board_lock);
-    debug("REFRESH\n");
-    draw_board(board, DRAW_MENU);
-    refresh_screen();
-    pthread_rwlock_unlock(&board->board_lock);
+    
+    while (true) {
+        pthread_rwlock_wrlock(&board->board_lock);
 
-    if (board->tempo != 0)
-        sleep_ms(board->tempo); 
+        debug("REFRESH\n");
+        draw_board(board, DRAW_MENU);
+        refresh_screen();
 
+        pthread_rwlock_unlock(&board->board_lock);
+
+        if (board->tempo != 0)
+            sleep_ms(board->tempo); 
+    }
     return NULL;
 }
 
@@ -47,7 +69,7 @@ void *pacman_thread(void* arg) {
     pacman_t* pacman = &board->pacmans[0];
 
     while (true) {
-        if (board->level_cmd != CONTINUE_PLAY) return NULL;
+        if (check_result(board) != CONTINUE_PLAY) return NULL;
 
         command_t* play;
         command_t c;
@@ -55,7 +77,7 @@ void *pacman_thread(void* arg) {
             c.command = get_input();
 
             if (c.command == '\0') {
-                board->level_cmd = CONTINUE_PLAY;
+                set_result(board, CONTINUE_PLAY);
                 continue;
             }
 
@@ -71,29 +93,33 @@ void *pacman_thread(void* arg) {
         debug("KEY %c\n", play->command);
 
         if (play->command == 'Q') {
-            board->level_cmd = QUIT_GAME;
+            set_result(board, QUIT_GAME);
+            //return; ???
             continue;
         }
 
         if (play->command == 'G') {
             pacman->current_move++;
-            board->level_cmd = CREATE_BACKUP;
+            set_result(board, CREATE_BACKUP);
+            //return; ???
             continue;
         }
 
         int result = move_pacman(board, 0, play);
         if (result == REACHED_PORTAL) {
             // Next level
-            board->level_cmd = NEXT_LEVEL;
+            set_result(board, NEXT_LEVEL);
+            //return; ???
             continue;
         }
 
         if (result == DEAD_PACMAN) {
-            board->level_cmd = QUIT_GAME;
+            set_result(board, QUIT_GAME);
+            //return; ???
             continue;
         }
 
-        board->level_cmd = CONTINUE_PLAY;
+        set_result(board, CONTINUE_PLAY);
 
     }
     return NULL;
@@ -105,7 +131,7 @@ void *ghost_thread(void* arg) {
     ghost_t* ghost = &board->ghosts[args->ghost_idx];
 
     while (true) {
-        if (board->level_cmd != CONTINUE_PLAY) return
+        if (check_result(board) != CONTINUE_PLAY) return NULL;
         move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
     }
     
@@ -168,24 +194,35 @@ int play_board(board_t* game_board) {
 }
 
 int play_board_threads(board_t* board) {
-    pthread_create(&display_tid, NULL, display_thread, &game_board);
-    pthread_create(&pac_tid, NULL, pacman_thread, &game_board); //Start pacman thread
-    for (int i = 0; i < game_board.n_ghosts; i++) {
+    pthread_t display_tid, pac_tid, ghost_tid[MAX_GHOSTS];
+
+    pthread_create(&display_tid, NULL, display_thread, &board);
+    pthread_create(&pac_tid, NULL, pacman_thread, &board); //Start pacman thread
+    for (int i = 0; i < board->n_ghosts; i++) {
         ghost_thread_args* args = calloc(1, sizeof(*args));
 
-        args->board = &game_board;
+        args->board = board;
         args->ghost_idx = i;
 
         pthread_create(&ghost_tid[i], NULL, ghost_thread, args);
     }
+
+
+    pthread_join(display_tid, NULL);
+    pthread_join(pac_tid, NULL);
+    for (int i = 0; i < board->n_ghosts; i++) {
+        pthread_join(ghost_tid[i], NULL);
+    }
+    return board->info.result;
 }
+
 
 int main(int argc, char** argv) {
     int accumulated_points = 0;
     bool end_game = false;
     pid_t pid = -1;
     board_t game_board;
-    game_board.level_cmd = CONTINUE_PLAY;
+    game_board.info.result = CONTINUE_PLAY;
 
     // Random seed for any random movements
     srand((unsigned int)time(NULL));
@@ -238,7 +275,6 @@ int main(int argc, char** argv) {
         }
         struct dirent* entry;
         int len;
-        pthread_t display_tid, pac_tid, ghost_tid[MAX_GHOSTS];
         pthread_rwlock_init(&game_board.board_lock, NULL);
 
         
@@ -261,13 +297,15 @@ int main(int argc, char** argv) {
             
             while(true) {
 
-                if (game_board.level_cmd == NEXT_LEVEL) {
+                int result = play_board_threads(&game_board);
+
+                if (result == NEXT_LEVEL) {
                     screen_refresh(&game_board, DRAW_WIN);
                     sleep_ms(game_board.tempo);
                     break;
                 }
     
-                if (game_board.level_cmd == QUIT_GAME) {
+                if (result == QUIT_GAME) {
                     if (pid == 0) {
                         if (game_board.pacmans[0].alive) {
                             exit(QUIT_GAME);
@@ -281,7 +319,7 @@ int main(int argc, char** argv) {
                     break;
                 }
 
-                if (game_board.level_cmd == CREATE_BACKUP) {
+                if (result == CREATE_BACKUP) {
                     if (pid) {
                         pid = fork();
                         if (pid == -1) {
@@ -320,11 +358,7 @@ int main(int argc, char** argv) {
 
             if (pid == 0) exit(QUIT_GAME);
     
-            pthread_join(display_tid, NULL);
-            pthread_join(pac_tid, NULL);
-            for (int i = 0; i < game_board.n_ghosts; i++) {
-                pthread_join(ghost_tid[i], NULL);
-            }
+
 
             for (int i = 0; i < game_board.width * game_board.height; i++) {
                 pthread_mutex_destroy(&game_board.board[i].pos_lock);
@@ -340,3 +374,5 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+
+//DESTRUIR LOCKS
