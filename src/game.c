@@ -15,6 +15,11 @@
 #define LOAD_BACKUP 3
 #define CREATE_BACKUP 4
 
+typedef struct {
+    board_t* board;
+    int ghost_idx;
+} ghost_thread_args;
+
 void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
     draw_board(game_board, mode);
@@ -23,10 +28,88 @@ void screen_refresh(board_t * game_board, int mode) {
         sleep_ms(game_board->tempo);       
 }
 
+void *display_thread(void* arg) {
+    board_t *board = (board_t*)arg;
+    pthread_rwlock_rdlock(&board->board_lock);
+    screen_refresh(board, DRAW_MENU);
+    pthread_rwlock_unlock(&board->board_lock);
+
+    return NULL;
+}
+
+void *pacman_thread(void* arg) {
+    board_t* board = (board_t*)arg;
+    pacman_t* pacman = &board->pacmans[0];
+
+
+    while (true) {
+        command_t* play;
+        command_t c;
+        if (pacman->n_moves == 0) { // if is user input
+            c.command = get_input();
+
+            if (c.command == '\0') {
+                board->level_cmd = CONTINUE_PLAY;
+                continue;
+            }
+
+            c.turns = 1;
+            play = &c;
+        }
+        else { // else if the moves are pre-defined in the file
+            // avoid buffer overflow wrapping around with modulo of n_moves
+            // this ensures that we always access a valid move for the pacman
+            play = &pacman->moves[pacman->current_move%pacman->n_moves];
+        }
+
+        debug("KEY %c\n", play->command);
+
+        if (play->command == 'Q') {
+            board->level_cmd = QUIT_GAME;
+            continue;
+        }
+
+        if (play->command == 'G') {
+            pacman->current_move++;
+            board->level_cmd = CREATE_BACKUP;
+            continue;
+        }
+
+        int result = move_pacman(board, 0, play);
+        if (result == REACHED_PORTAL) {
+            // Next level
+            board->level_cmd = NEXT_LEVEL;
+            continue;
+        }
+
+        if (result == DEAD_PACMAN) {
+            board->level_cmd = QUIT_GAME;
+            continue;
+        }
+
+        board->level_cmd = CONTINUE_PLAY;
+        
+    }
+    return NULL;
+}
+
+void *ghost_thread(void* arg) {
+    ghost_thread_args* args = (ghost_thread_args*)arg;
+    board_t* board = args->board;
+    ghost_t* ghost = &board->ghosts[args->ghost_idx];
+
+    while (true) {
+        move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
+    }
+    
+    return NULL;
+}
+
 int play_board(board_t * game_board) {
     pacman_t* pacman = &game_board->pacmans[0];
     command_t* play;
-    command_t c; 
+    command_t c;
+
     if (pacman->n_moves == 0) { // if is user input
         c.command = get_input();
 
@@ -138,7 +221,7 @@ int main(int argc, char** argv) {
 
         while (!end_game && (entry = readdir(dir)) != NULL) {
             len = strlen(entry->d_name);
-            if (len <= 4 && strcmp(entry->d_name + len - 4, LEVEL) != 0) continue;
+            if (len <= 4 || strcmp(entry->d_name + len - 4, LEVEL) != 0) continue;
 
             strcpy(game_board.pacman_file, "");
             strcpy(game_board.ghosts_files[0], "");
@@ -151,6 +234,18 @@ int main(int argc, char** argv) {
 
             draw_board(&game_board, DRAW_MENU);
             refresh_screen();
+
+            pthread_t pac_tid, ghost_tid[MAX_GHOSTS];
+
+            pthread_create(&pac_tid, NULL, pacman_thread, &game_board); //Start pacman thread
+            for (int i = 0; i < game_board.n_ghosts; i++) {
+                ghost_thread_args* args = calloc(1, sizeof(*args));
+
+                args->board = &game_board;
+                args->ghost_idx = i;
+
+                pthread_create(&ghost_tid[i], NULL, ghost_thread, args);
+            }
 
             while(true) {
                 int result = play_board(&game_board); 
@@ -166,8 +261,6 @@ int main(int argc, char** argv) {
                         if (game_board.pacmans[0].alive) {
                             exit(QUIT_GAME);
                         } else {
-                            screen_refresh(&game_board, DRAW_GAME_OVER); 
-                            sleep_ms(game_board.tempo);
                             exit(LOAD_BACKUP);
                         }
                     }

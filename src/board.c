@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <string.h>
+#include <pthread.h>
 
 FILE * debugfile;
 
@@ -52,7 +53,7 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     // check passo
     if (pac->waiting > 0) {
         pac->waiting -= 1;
-        return VALID_MOVE;        
+        return VALID_MOVE;
     }
     pac->waiting = pac->passo;
 
@@ -347,16 +348,14 @@ void load_static_pacman(board_t* board, int points) {
 }
 
 void load_file_pacman(board_t* board, int points) {
-    board->n_pacmans = 1;
     board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
     if (strcmp(board->pacman_file, "") == 0) {
         load_static_pacman(board, points);
     } else {
-        pacman_t* pac = & board->pacmans[0];
+        pacman_t* pac = &board->pacmans[0];
         pac->points = points;
         pac->alive = 1;
-        int num = 0;
-        read_file(board, board->pacman_file, PACMAN, num);
+        read_file(board, board->pacman_file, PACMAN, 0);
         board->board[pac->pos_y * board->width + pac->pos_x].content = 'P';
     }
     return;
@@ -426,9 +425,7 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
         }
 
         case 'P': {
-            char filename[MAX_FILENAME];
-            sscanf(instruction, "PAC %s", filename);
-            strcpy(board->pacman_file, filename);
+            sscanf(instruction, "PAC %s", board->pacman_file);
             board->n_pacmans = 1;
             return;
         }   
@@ -447,6 +444,7 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
 
         default: {
             for (int i = 0; i < board->width; i++) {
+                pthread_mutex_init(&board->board[(*num) * board->width + i].pos_lock, NULL);
                 switch (instruction[i]) {
                     case 'X': board->board[(*num) * board->width + i].content = 'W';
                               break;
@@ -514,11 +512,7 @@ void process_ghost_instruction(board_t* board, char* instruction, int num) {
             exit(EXIT_FAILURE);
         }
 
-        case 'W':
-        case 'A':
-        case 'S':
-        case 'D':
-        case 'T': {
+        default: {
             command_t cmd;
             cmd.command = instruction[0];
             cmd.turns = 1;
@@ -526,7 +520,6 @@ void process_ghost_instruction(board_t* board, char* instruction, int num) {
                 sscanf(instruction, "T %d", &cmd.turns);
                 cmd.turns_left = cmd.turns;
             }
-
             ghost->moves[ghost->n_moves++] = cmd;
 
             return;
