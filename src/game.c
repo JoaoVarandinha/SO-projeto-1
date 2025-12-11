@@ -49,7 +49,7 @@ int check_result(board_t* board) {
 void *display_thread(void* arg) {
     board_t *board = (board_t*)arg;
     
-    while (true) {
+    while (check_result(board) == CONTINUE_PLAY) {
         pthread_rwlock_wrlock(&board->board_lock);
 
         debug("REFRESH\n");
@@ -58,8 +58,7 @@ void *display_thread(void* arg) {
 
         pthread_rwlock_unlock(&board->board_lock);
 
-        if (board->tempo != 0)
-            sleep_ms(board->tempo); 
+        sleep_ms(board->tempo); 
     }
     return NULL;
 }
@@ -68,8 +67,7 @@ void *pacman_thread(void* arg) {
     board_t* board = (board_t*)arg;
     pacman_t* pacman = &board->pacmans[0];
 
-    while (true) {
-        if (check_result(board) != CONTINUE_PLAY) return NULL;
+    while (check_result(board) == CONTINUE_PLAY) {
 
         command_t* play;
         command_t c;
@@ -121,7 +119,10 @@ void *pacman_thread(void* arg) {
 
         set_result(board, CONTINUE_PLAY);
 
+        sleep_ms(board->tempo);
+
     }
+
     return NULL;
 }
 
@@ -130,9 +131,10 @@ void *ghost_thread(void* arg) {
     board_t* board = args->board;
     ghost_t* ghost = &board->ghosts[args->ghost_idx];
 
-    while (true) {
-        if (check_result(board) != CONTINUE_PLAY) return NULL;
+    while (check_result(board) == CONTINUE_PLAY) {
         move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
+
+        sleep_ms(board->tempo);
     }
     
     return NULL;
@@ -213,6 +215,7 @@ int play_board_threads(board_t* board) {
     for (int i = 0; i < board->n_ghosts; i++) {
         pthread_join(ghost_tid[i], NULL);
     }
+
     return board->info.result;
 }
 
@@ -276,15 +279,15 @@ int main(int argc, char** argv) {
         struct dirent* entry;
         int len;
         pthread_rwlock_init(&game_board.board_lock, NULL);
+        pthread_rwlock_init(&game_board.info.info_lock, NULL);
 
-        
         while (!end_game && (entry = readdir(dir)) != NULL) {
             len = strlen(entry->d_name);
             if (len <= 4 || strcmp(entry->d_name + len - 4, LEVEL) != 0) continue;
             
             strcpy(game_board.pacman_file, "");
             strcpy(game_board.ghosts_files[0], "");
-            
+
             read_file(&game_board, entry->d_name, LEVEL, 0);
             strcpy(game_board.level_name, entry->d_name);
             
@@ -293,8 +296,7 @@ int main(int argc, char** argv) {
             
             draw_board(&game_board, DRAW_MENU);
             refresh_screen();
-            
-            
+
             while(true) {
 
                 int result = play_board_threads(&game_board);
@@ -348,7 +350,6 @@ int main(int argc, char** argv) {
                     }
                 }
 
-                sleep(game_board.tempo);
             }
 
             accumulated_points = game_board.pacmans[0].points;
@@ -375,4 +376,3 @@ int main(int argc, char** argv) {
     return 0;
 }
 
-//DESTRUIR LOCKS
