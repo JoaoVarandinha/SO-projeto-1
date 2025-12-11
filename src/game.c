@@ -328,8 +328,10 @@ int main(int argc, char** argv) {
                                 perror("Error forking");
                                 exit(EXIT_FAILURE);
                         } else if (pid == 0) {
-                            screen_refresh(&game_board, DRAW_MENU);
-                            sleep_ms(game_board.tempo);
+                            //screen_refresh(&game_board, DRAW_MENU);
+                            //sleep_ms(game_board.tempo);
+                            //apagar as 2 linhas de cima e fzr:
+                            game_board.info.result = CONTINUE_PLAY;
                             continue;
                         } else {
                             int status;
@@ -339,14 +341,20 @@ int main(int argc, char** argv) {
                                     end_game = true;
                                     break; 
                                 } else if (WEXITSTATUS(status) == LOAD_BACKUP) {
+                                    //apagar o sleep q vem a seguir pas dentro doelse if e fzr:
+                                    game_board.info.result = CONTINUE_PLAY;
                                     screen_refresh(&game_board, DRAW_MENU);
-                                    sleep_ms(game_board.tempo);
+                                    //sleep_ms(game_board.tempo);
                                     continue;
                                 }
-                            }
+                            } else {
                             perror("Error waiting for child");
                             exit(EXIT_FAILURE);
+                            }
                         }
+                    } else {
+                    game_board.info.result = CONTINUE_PLAY;
+                    continue;
                     }
                 }
 
