@@ -15,11 +15,14 @@ FILE * debugfile;
 static int find_and_kill_pacman(board_t* board, int new_x, int new_y) {
     for (int p = 0; p < board->n_pacmans; p++) {
         pacman_t* pac = &board->pacmans[p];
+        pthread_rwlock_rdlock(&pac->pac_lock);
         if (pac->pos_x == new_x && pac->pos_y == new_y && pac->alive) {
+            pthread_rwlock_unlock(&pac->pac_lock);
             pac->alive = 0;
             kill_pacman(board, p);
             return DEAD_PACMAN;
         }
+        pthread_rwlock_unlock(&pac->pac_lock);
     }
     return VALID_MOVE;
 }
@@ -44,11 +47,13 @@ void sleep_ms(int milliseconds) {
 int move_pacman(board_t* board, int pacman_index, command_t* command) {
     pthread_rwlock_rdlock(&board->board_lock);
     if (pacman_index < 0 || !board->pacmans[pacman_index].alive) {
+        pthread_rwlock_unlock(&board->board_lock);
         return DEAD_PACMAN; // Invalid or dead pacman
     }
     pthread_rwlock_unlock(&board->board_lock);
 
     pacman_t* pac = &board->pacmans[pacman_index];
+        
     int new_x = pac->pos_x;
     int new_y = pac->pos_y;
 
@@ -229,12 +234,16 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
 
 int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     ghost_t* ghost = &board->ghosts[ghost_index];
+    pthread_rwlock_rdlock(&ghost->ghost_lock);
     int x = ghost->pos_x;
     int y = ghost->pos_y;
+    pthread_rwlock_unlock(&ghost->ghost_lock);
     int new_x = x;
     int new_y = y;
 
+    pthread_rwlock_wrlock(&ghost->ghost_lock);
     ghost->charged = 0; //uncharge
+    pthread_rwlock_unlock(&ghost->ghost_lock);
     int result = move_ghost_charged_direction(board, ghost, direction, &new_x, &new_y);
     if (result == INVALID_MOVE) {
         debug("DEFAULT CHARGED MOVE - direction = %c\n", direction);
@@ -242,14 +251,18 @@ int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     }
 
     // Get board indices
+    pthread_rwlock_rdlock(&ghost->ghost_lock);
     int old_index = get_board_index(board, ghost->pos_x, ghost->pos_y);
+    pthread_rwlock_unlock(&ghost->ghost_lock);
     int new_index = get_board_index(board, new_x, new_y);
 
     // Update board - clear old position (restore what was there)
     board->board[old_index].content = ' '; // Or restore the dot if ghost was on one
     // Update ghost position
+    pthread_rwlock_wrlock(&ghost->ghost_lock);
     ghost->pos_x = new_x;
     ghost->pos_y = new_y;
+    pthread_rwlock_unlock(&ghost->ghost_lock);
     // Update board - set new position
     board->board[new_index].content = 'M';
     return result;
