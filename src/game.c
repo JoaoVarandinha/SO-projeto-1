@@ -132,9 +132,9 @@ void *ghost_thread(void* arg) {
     ghost_t* ghost = &board->ghosts[args->ghost_idx];
 
     while (check_result(board) == CONTINUE_PLAY) {
-        move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
-
         sleep_ms(board->tempo);
+        
+        move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
     }
     
     return NULL;
@@ -322,7 +322,7 @@ int main(int argc, char** argv) {
                 }
 
                 if (result == CREATE_BACKUP) {
-                    if (pid) {
+                    if (pid != 0) {
                         pid = fork();
                         if (pid == -1) {
                                 perror("Error forking");
