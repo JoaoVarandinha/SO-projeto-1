@@ -196,8 +196,8 @@ int play_board(board_t* game_board) {
 int play_board_threads(board_t* board) {
     pthread_t display_tid, pac_tid, ghost_tid[MAX_GHOSTS];
 
-    pthread_create(&display_tid, NULL, display_thread, &board);
-    pthread_create(&pac_tid, NULL, pacman_thread, &board); //Start pacman thread
+    pthread_create(&display_tid, NULL, display_thread, board);
+    pthread_create(&pac_tid, NULL, pacman_thread, board); //Start pacman thread
     for (int i = 0; i < board->n_ghosts; i++) {
         ghost_thread_args* args = calloc(1, sizeof(*args));
 

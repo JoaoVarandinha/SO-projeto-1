@@ -78,11 +78,14 @@ void draw_board(board_t* board, int mode) {
 
             for (int g = 0; g < board->n_ghosts; g++) {
                 ghost_t* ghost = &board->ghosts[g];
+                pthread_rwlock_rdlock(&ghost->ghost_lock);
                 if (ghost->pos_x == x && ghost->pos_y == y) {
                     if (ghost->charged)
                         ghost_charged = 1;
+                    pthread_rwlock_unlock(&ghost->ghost_lock);
                     break;
                 }
+                pthread_rwlock_unlock(&ghost->ghost_lock);
             }
 
             // Move cursor to position
@@ -132,8 +135,10 @@ void draw_board(board_t* board, int mode) {
 
     // Draw score/status at the bottom
     attron(COLOR_PAIR(5));
+    pthread_rwlock_rdlock(&board->pacmans[0].pac_lock);
     mvprintw(start_row + board->height + 1, 0, "Points: %d",
              board->pacmans[0].points); // Assuming first pacman for now
+    pthread_rwlock_unlock(&board->pacmans[0].pac_lock);
     attroff(COLOR_PAIR(5));
 }
 
