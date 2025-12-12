@@ -13,9 +13,6 @@ FILE * debugfile;
 
 // Helper private function to find and kill pacman at specific position
 static int find_and_kill_pacman(board_t* board, int new_x, int new_y) {
-    int index = new_y * board->width + new_x;
-
-    pthread_mutex_lock(&board->board[index].pos_lock);
 
     for (int p = 0; p < board->n_pacmans; p++) {
         pacman_t* pac = &board->pacmans[p];
@@ -23,13 +20,10 @@ static int find_and_kill_pacman(board_t* board, int new_x, int new_y) {
         if (pac->pos_x == new_x && pac->pos_y == new_y && pac->alive) {
             kill_pacman(board, p);
             pthread_mutex_unlock(&pac->pac_lock);
-            pthread_mutex_unlock(&board->board[index].pos_lock);
             return DEAD_PACMAN;
         }
         pthread_mutex_unlock(&pac->pac_lock);
     }
-
-    pthread_mutex_unlock(&board->board[index].pos_lock);
 
     return VALID_MOVE;
 }
@@ -463,6 +457,7 @@ void load_static_pacman(board_t* board, int points) {
     for (i = 0; i < board->width * board->height; i++) {
             if (board->board[i].content == ' ' && board->board[i].has_dot) break;
     }
+    board->n_pacmans = 1;
     board->board[i].content = 'P'; // Pacman
     board->pacmans[0].pos_x = i % board->width;
     board->pacmans[0].pos_y = i / board->width;

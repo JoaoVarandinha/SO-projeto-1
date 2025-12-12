@@ -145,7 +145,13 @@ void *ghost_thread(void* arg) {
 
     while (check_result(board) == CONTINUE_PLAY) {
         
-        move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
+        int result = move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
+        
+        if (result == DEAD_PACMAN) {
+            set_result(board, QUIT_GAME);
+            break;
+        }
+
         sleep_ms(board->tempo);
     }
     

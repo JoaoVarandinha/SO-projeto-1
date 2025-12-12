@@ -4,6 +4,12 @@
 #include <dirent.h>
 #include <pthread.h>
 
+#define CONTINUE_PLAY 0
+#define NEXT_LEVEL 1
+#define QUIT_GAME 2
+#define LOAD_BACKUP 3
+#define CREATE_BACKUP 4
+
 #define MAX_MOVES 20
 #define MAX_LEVELS 20
 #define MAX_FILENAME 256
@@ -129,5 +135,9 @@ void debug(const char * format, ...);
 
 /*Writes the board and its contents to the open debug file*/
 void print_board(board_t* board);
+
+int check_result(board_t* board);
+
+void set_result(board_t* board, int res);
 
 #endif
