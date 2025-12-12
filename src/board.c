@@ -458,7 +458,7 @@ void kill_pacman(board_t* board, int pacman_index) {
 
 
 // Static Loading
-void load_static_pacman(board_t* board, int points) {
+void load_static_pacman(board_t* board) {
     int i;
     for (i = 0; i < board->width * board->height; i++) {
             if (board->board[i].content == ' ' && board->board[i].has_dot) break;
@@ -467,20 +467,20 @@ void load_static_pacman(board_t* board, int points) {
     board->board[i].content = 'P'; // Pacman
     board->pacmans[0].pos_x = i % board->width;
     board->pacmans[0].pos_y = i / board->width;
-    board->pacmans[0].alive = 1;
-    board->pacmans[0].points = points;
     return;
 }
 
 void load_file_pacman(board_t* board, int points) {
     board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
+    pacman_t* pac = &board->pacmans[0];
+
+    pac->points = points;
+    pac->alive = 1;
+    pthread_mutex_init(&pac->pac_lock, NULL);
+
     if (strcmp(board->pacman_file, "") == 0) {
-        load_static_pacman(board, points);
+        load_static_pacman(board);
     } else {
-        pacman_t* pac = &board->pacmans[0];
-        pac->points = points;
-        pac->alive = 1;
-        pthread_mutex_init(&pac->pac_lock, NULL);
         read_file(board, board->pacman_file, PACMAN, 0);
         board->board[pac->pos_y * board->width + pac->pos_x].content = 'P';
     }
@@ -506,6 +506,7 @@ void load_static_ghost(board_t* board) {
         board->ghosts[0].moves[i].command = 'A';
         board->ghosts[0].moves[i].turns = 1; 
     }
+    pthread_mutex_init(&board->ghosts[0].ghost_lock, NULL);
 
     // Ghost 1
     board->board[2 * board->width + 4].content = 'M'; // Monster
@@ -516,7 +517,9 @@ void load_static_ghost(board_t* board) {
     board->ghosts[1].current_move = 0;
     board->ghosts[1].n_moves = 1;
     board->ghosts[1].moves[0].command = 'R'; // Random
-    board->ghosts[1].moves[0].turns = 1; 
+    board->ghosts[1].moves[0].turns = 1;
+
+    pthread_mutex_init(&board->ghosts[0].ghost_lock, NULL);
     
     return;
 }
@@ -755,15 +758,26 @@ int load_static_level(board_t *board, int points) {
     }
 
     load_static_ghost(board);
-    load_static_pacman(board, points);
+    board->pacmans[0].points = points;
+    load_static_pacman(board);
 
     return 0;
 }
 
 void unload_level(board_t * board) {
+    pthread_rwlock_destroy(&board->board_lock);
+    pthread_mutex_destroy(&board->info.info_lock);
+    pthread_mutex_destroy(&board->pacmans[0].pac_lock);
+    for (int i = 0; i < board->n_ghosts; i++) {
+        pthread_mutex_destroy(&board->ghosts[i].ghost_lock);
+    }
+    for (int i = 0; i < board->width * board->height; i++) {
+        pthread_mutex_destroy(&board->board[i].pos_lock);
+    }
     free(board->board);
     free(board->pacmans);
     free(board->ghosts);
+    return;
 }
 
 void open_debug_file(char *filename) {

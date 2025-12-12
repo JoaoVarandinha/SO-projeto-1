@@ -50,19 +50,6 @@ void set_result(board_t* board, int res) {
     return;
 }
 
-void destroy_locks(board_t* board) {
-    pthread_rwlock_destroy(&board->board_lock);
-    pthread_mutex_destroy(&board->info.info_lock);
-    pthread_mutex_destroy(&board->pacmans[0].pac_lock);
-    for (int i = 0; i < board->n_ghosts; i++) {
-        pthread_mutex_destroy(&board->ghosts[i].ghost_lock);
-    }
-    for (int i = 0; i < board->width * board->height; i++) {
-        pthread_mutex_destroy(&board->board[i].pos_lock);
-    }
-    return;
-}
-
 void *display_thread(void* arg) {
     board_t *board = (board_t*)arg;
     
@@ -75,6 +62,13 @@ void *display_thread(void* arg) {
         refresh_screen();
 
         pthread_rwlock_unlock(&board->board_lock);
+
+        char c = get_input();
+        if (c != '\0') {
+            pthread_mutex_lock(&board->info.info_lock);
+            board->info.move_input = c;
+            pthread_mutex_unlock(&board->info.info_lock);
+        }
 
         sleep_ms(board->tempo); 
     }
@@ -90,12 +84,11 @@ void *pacman_thread(void* arg) {
         command_t* play;
         command_t c;
         if (pacman->n_moves == 0) { // if is user input
-            c.command = get_input();
 
-            if (c.command == '\0') {
-                set_result(board, CONTINUE_PLAY);
-                continue;
-            }
+            pthread_mutex_lock(&board->info.info_lock);
+            c.command = board->info.move_input;
+            board->info.move_input = '\0';
+            pthread_mutex_unlock(&board->info.info_lock);
 
             c.turns = 1;
             play = &c;
@@ -144,6 +137,7 @@ void *ghost_thread(void* arg) {
     ghost_t* ghost = &board->ghosts[args->ghost_idx];
 
     while (check_result(board) == CONTINUE_PLAY) {
+        sleep_ms(board->tempo);
         
         int result = move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
         
@@ -152,7 +146,6 @@ void *ghost_thread(void* arg) {
             break;
         }
 
-        sleep_ms(board->tempo);
     }
     
     free(args);
@@ -331,8 +324,10 @@ int main(int argc, char** argv) {
                 if (result == QUIT_GAME) {
                     if (pid == 0) {
                         if (game_board.pacmans[0].alive) {
+                            unload_level(&game_board);
                             exit(QUIT_GAME);
                         } else {
+                            unload_level(&game_board);
                             exit(LOAD_BACKUP);
                         }
                     }
@@ -383,7 +378,6 @@ int main(int argc, char** argv) {
 
             accumulated_points = game_board.pacmans[0].points;
 
-            destroy_locks(&game_board);
             print_board(&game_board);
             unload_level(&game_board);
 

@@ -4,12 +4,6 @@
 #include <dirent.h>
 #include <pthread.h>
 
-#define CONTINUE_PLAY 0
-#define NEXT_LEVEL 1
-#define QUIT_GAME 2
-#define LOAD_BACKUP 3
-#define CREATE_BACKUP 4
-
 #define MAX_MOVES 20
 #define MAX_LEVELS 20
 #define MAX_FILENAME 256
@@ -44,7 +38,7 @@ typedef struct {
     int current_move;
     int n_moves; // number of predefined moves, 0 if controlled by user, >0 if readed from level file
     int waiting;
-    pthread_mutex_t pac_lock;
+    pthread_mutex_t pac_lock; // lock for pacman
 } pacman_t;
 
 typedef struct {
@@ -55,19 +49,20 @@ typedef struct {
     int current_move;
     int waiting;
     int charged;
-    pthread_mutex_t ghost_lock;
+    pthread_mutex_t ghost_lock; // lock for ghost
 } ghost_t;
 
 typedef struct {
     char content;   // stuff like 'P' for pacman 'M' for monster/ghost and 'W' for wall
     int has_dot;    // whether there is a dot in this position or not
     int has_portal; // whether there is a portal in this position or not
-    pthread_mutex_t pos_lock;
+    pthread_mutex_t pos_lock; // lock for this position
 } board_pos_t;
 
 typedef struct {
-    int result;
-    pthread_mutex_t info_lock;
+    int result; // result of last move
+    char move_input; // last move input
+    pthread_mutex_t info_lock; // lock for game info
 } game_info;
 
 typedef struct {
@@ -82,8 +77,8 @@ typedef struct {
     char ghosts_files[MAX_GHOSTS][MAX_FILENAME]; // files with monster movements
     char dir_name[MAX_DIRLENGTH];     // name of directory with info files
     int tempo;              // Duration of each play
-    pthread_rwlock_t board_lock;
-    game_info info;
+    pthread_rwlock_t board_lock; // global lock for the board
+    game_info info; // game info for threads
 } board_t;
 
 /*Makes the current thread sleep for 'int milliseconds' miliseconds*/
@@ -100,7 +95,7 @@ void kill_pacman(board_t* board, int pacman_index);
 
 
 /*Adds a static pacman to the board*/
-void load_static_pacman(board_t* board, int points);
+void load_static_pacman(board_t* board);
 
 /*Adds a file pacman to the board*/
 void load_file_pacman(board_t* board, int points);
@@ -135,9 +130,5 @@ void debug(const char * format, ...);
 
 /*Writes the board and its contents to the open debug file*/
 void print_board(board_t* board);
-
-int check_result(board_t* board);
-
-void set_result(board_t* board, int res);
 
 #endif
