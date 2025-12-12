@@ -1,7 +1,8 @@
 # Compiler variables
 CC = gcc
 CFLAGS = -g -Wall -Wextra -Werror -std=c17 -D_POSIX_C_SOURCE=200809L
-CFLAGS += -fsanitize=thread
+#CFLAGS += -fsanitize=thread
+#CFLAGS += -fsanitize=address
 LDFLAGS = -lncurses
 
 # Directory variables

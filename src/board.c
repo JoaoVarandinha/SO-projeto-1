@@ -463,7 +463,6 @@ void load_static_pacman(board_t* board) {
     for (i = 0; i < board->width * board->height; i++) {
             if (board->board[i].content == ' ' && board->board[i].has_dot) break;
     }
-    board->n_pacmans = 1;
     board->board[i].content = 'P'; // Pacman
     board->pacmans[0].pos_x = i % board->width;
     board->pacmans[0].pos_y = i / board->width;
@@ -471,6 +470,7 @@ void load_static_pacman(board_t* board) {
 }
 
 void load_file_pacman(board_t* board, int points) {
+    board->n_pacmans = 1;
     board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
     pacman_t* pac = &board->pacmans[0];
 
@@ -556,7 +556,6 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
 
         case 'P': {
             sscanf(instruction, "PAC %s", board->pacman_file);
-            board->n_pacmans = 1;
             return;
         }   
 

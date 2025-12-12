@@ -79,16 +79,24 @@ void *pacman_thread(void* arg) {
     board_t* board = (board_t*)arg;
     pacman_t* pacman = &board->pacmans[0];
 
-    while (check_result(board) == CONTINUE_PLAY) {
+        while (check_result(board) == CONTINUE_PLAY) {
 
-        command_t* play;
-        command_t c;
-        if (pacman->n_moves == 0) { // if is user input
+            command_t* play;
+            command_t c;
+            if (pacman->n_moves == 0) { // if is user input
 
-            pthread_mutex_lock(&board->info.info_lock);
-            c.command = board->info.move_input;
-            board->info.move_input = '\0';
-            pthread_mutex_unlock(&board->info.info_lock);
+                while (true) {
+                    pthread_mutex_lock(&board->info.info_lock);
+                    if (board->info.move_input == '\0') {
+                        pthread_mutex_unlock(&board->info.info_lock);
+                        sleep_ms(board->tempo);
+                        continue;
+                    }
+                    c.command = board->info.move_input;
+                    board->info.move_input = '\0';
+                    pthread_mutex_unlock(&board->info.info_lock);
+                    break;
+                }
 
             c.turns = 1;
             play = &c;
@@ -290,8 +298,6 @@ int main(int argc, char** argv) {
         }
         struct dirent* entry;
         int len;
-        pthread_rwlock_init(&game_board.board_lock, NULL);
-        pthread_mutex_init(&game_board.info.info_lock, NULL);
 
         while (!end_game && (entry = readdir(dir)) != NULL) {
             len = strlen(entry->d_name);
@@ -310,6 +316,9 @@ int main(int argc, char** argv) {
             
             draw_board(&game_board, DRAW_MENU);
             refresh_screen();
+
+            pthread_rwlock_init(&game_board.board_lock, NULL);
+            pthread_mutex_init(&game_board.info.info_lock, NULL);
 
             while(true) {
 
@@ -384,7 +393,7 @@ int main(int argc, char** argv) {
         }
 
         if (pid == 0) exit(QUIT_GAME);
-        
+
         closedir(dir);
     }
 

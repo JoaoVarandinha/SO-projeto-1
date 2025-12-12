@@ -62,6 +62,7 @@ typedef struct {
 typedef struct {
     int result; // result of last move
     char move_input; // last move input
+    pthread_cond_t input_ready; // condition for pacman thread to wait for input
     pthread_mutex_t info_lock; // lock for game info
 } game_info;
 
