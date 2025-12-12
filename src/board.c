@@ -291,7 +291,9 @@ int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     int old_index = get_board_index(board, old_x, old_y);
     int new_index = get_board_index(board, new_x, new_y);
 
-    if (new_index < old_index) {
+    if (new_index == old_index) {
+        pthread_mutex_lock(&board->board[new_index].pos_lock);
+    } else if (new_index < old_index) {
         pthread_mutex_lock(&board->board[new_index].pos_lock);
         pthread_mutex_lock(&board->board[old_index].pos_lock);
     } else {
@@ -310,8 +312,12 @@ int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     // Update board - set new position
     board->board[new_index].content = 'M';
 
-    pthread_mutex_unlock(&board->board[new_index].pos_lock);
-    pthread_mutex_unlock(&board->board[old_index].pos_lock);
+    if (new_index == old_index) {
+        pthread_mutex_unlock(&board->board[new_index].pos_lock);
+    } else {
+        pthread_mutex_unlock(&board->board[new_index].pos_lock);
+        pthread_mutex_unlock(&board->board[old_index].pos_lock);
+    }
     pthread_rwlock_unlock(&board->board_lock);
     return result;
 }
