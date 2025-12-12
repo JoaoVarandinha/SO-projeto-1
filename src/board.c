@@ -21,8 +21,8 @@ static int find_and_kill_pacman(board_t* board, int new_x, int new_y) {
         pacman_t* pac = &board->pacmans[p];
         pthread_mutex_lock(&pac->pac_lock);
         if (pac->pos_x == new_x && pac->pos_y == new_y && pac->alive) {
-            pthread_mutex_unlock(&pac->pac_lock);
             kill_pacman(board, p);
+            pthread_mutex_unlock(&pac->pac_lock);
             pthread_mutex_unlock(&board->board[index].pos_lock);
             return DEAD_PACMAN;
         }
@@ -153,8 +153,10 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
 
     // Check for ghosts
     if (target_content == 'M') {
-        pthread_mutex_unlock(&board->board[new_index].pos_lock);
+        pthread_mutex_lock(&pac->pac_lock);
         kill_pacman(board, pacman_index);
+        pthread_mutex_unlock(&pac->pac_lock);
+        pthread_mutex_unlock(&board->board[new_index].pos_lock);
         pthread_mutex_unlock(&board->board[old_index].pos_lock);
         pthread_rwlock_unlock(&board->board_lock);
         return DEAD_PACMAN;
@@ -445,13 +447,11 @@ void kill_pacman(board_t* board, int pacman_index) {
     
     int index = pac->pos_y * board->width + pac->pos_x;
 
-    pthread_mutex_lock(&pac->pac_lock);
     // Remove pacman from the board
     board->board[index].content = ' ';
 
     // Mark pacman as dead
     pac->alive = 0;
-    pthread_mutex_unlock(&pac->pac_lock);
 
     return;
 }
