@@ -38,7 +38,7 @@ typedef struct {
     int current_move;
     int n_moves; // number of predefined moves, 0 if controlled by user, >0 if readed from level file
     int waiting;
-    pthread_rwlock_t pac_lock;
+    pthread_mutex_t pac_lock;
 } pacman_t;
 
 typedef struct {
@@ -49,7 +49,7 @@ typedef struct {
     int current_move;
     int waiting;
     int charged;
-    pthread_rwlock_t ghost_lock;
+    pthread_mutex_t ghost_lock;
 } ghost_t;
 
 typedef struct {
@@ -60,9 +60,8 @@ typedef struct {
 } board_pos_t;
 
 typedef struct {
-    int running;
     int result;
-    pthread_rwlock_t info_lock;
+    pthread_mutex_t info_lock;
 } game_info;
 
 typedef struct {

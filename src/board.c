@@ -13,16 +13,24 @@ FILE * debugfile;
 
 // Helper private function to find and kill pacman at specific position
 static int find_and_kill_pacman(board_t* board, int new_x, int new_y) {
+    int index = new_y * board->width + new_x;
+
+    pthread_mutex_lock(&board->board[index].pos_lock);
+
     for (int p = 0; p < board->n_pacmans; p++) {
         pacman_t* pac = &board->pacmans[p];
-        pthread_rwlock_rdlock(&pac->pac_lock);
+        pthread_mutex_lock(&pac->pac_lock);
         if (pac->pos_x == new_x && pac->pos_y == new_y && pac->alive) {
-            pthread_rwlock_unlock(&pac->pac_lock);
+            pthread_mutex_unlock(&pac->pac_lock);
             kill_pacman(board, p);
+            pthread_mutex_unlock(&board->board[index].pos_lock);
             return DEAD_PACMAN;
         }
-        pthread_rwlock_unlock(&pac->pac_lock);
+        pthread_mutex_unlock(&pac->pac_lock);
     }
+
+    pthread_mutex_unlock(&board->board[index].pos_lock);
+
     return VALID_MOVE;
 }
 
@@ -44,14 +52,14 @@ void sleep_ms(int milliseconds) {
 }
 
 int move_pacman(board_t* board, int pacman_index, command_t* command) {
-    pthread_rwlock_rdlock(&board->pacmans[0].pac_lock);
-    if (pacman_index < 0 || !board->pacmans[pacman_index].alive) {
-        pthread_rwlock_unlock(&board->pacmans[0].pac_lock);
+    pacman_t* pac = &board->pacmans[pacman_index];
+
+    pthread_mutex_lock(&pac->pac_lock);
+
+    if (pacman_index < 0 || !pac->alive) {
+        pthread_mutex_unlock(&pac->pac_lock);
         return DEAD_PACMAN; // Invalid or dead pacman
     }
-    pthread_rwlock_unlock(&board->pacmans[0].pac_lock);
-
-    pacman_t* pac = &board->pacmans[pacman_index];
         
     int new_x = pac->pos_x;
     int new_y = pac->pos_y;
@@ -59,6 +67,7 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
     // check passo
     if (pac->waiting > 0) {
         pac->waiting -= 1;
+        pthread_mutex_unlock(&pac->pac_lock);
         return VALID_MOVE;
     }
     pac->waiting = pac->passo;
@@ -90,22 +99,28 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
                 command->turns_left = command->turns;
             }
             else command->turns_left -= 1;
-            return VALID_MOVE;
+            pthread_mutex_unlock(&pac->pac_lock);
+            return  VALID_MOVE;
         default:
+            pthread_mutex_unlock(&pac->pac_lock);
             return INVALID_MOVE; // Invalid direction
     }
 
     // Logic for the WASD movement
     pac->current_move+=1;
 
+    pthread_mutex_unlock(&pac->pac_lock);
+
+    pthread_rwlock_rdlock(&board->board_lock);
+
     // Check boundaries
     if (!is_valid_position(board, new_x, new_y)) {
+        pthread_rwlock_unlock(&board->board_lock);
         return INVALID_MOVE;
     }
 
     int new_index = get_board_index(board, new_x, new_y);
     int old_index = get_board_index(board, pac->pos_x, pac->pos_y);
-
 
     if (new_index < old_index) {
         pthread_mutex_lock(&board->board[new_index].pos_lock);
@@ -114,61 +129,70 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
         pthread_mutex_lock(&board->board[old_index].pos_lock);
         pthread_mutex_lock(&board->board[new_index].pos_lock);
     }
-    pthread_rwlock_rdlock(&board->board_lock);
 
-    
     char target_content = board->board[new_index].content;
 
     if (board->board[new_index].has_portal) {
-        pthread_rwlock_unlock(&board->board_lock);
 
         board->board[old_index].content = ' ';
         board->board[new_index].content = 'P';
-        pthread_rwlock_unlock(&board->board_lock);
+
         pthread_mutex_unlock(&board->board[new_index].pos_lock);
         pthread_mutex_unlock(&board->board[old_index].pos_lock);
+        pthread_rwlock_unlock(&board->board_lock);
         return REACHED_PORTAL;
     }
 
     // Check for walls
     if (target_content == 'W') {
-        pthread_rwlock_unlock(&board->board_lock);
         pthread_mutex_unlock(&board->board[new_index].pos_lock);
         pthread_mutex_unlock(&board->board[old_index].pos_lock);
+        pthread_rwlock_unlock(&board->board_lock);
         return INVALID_MOVE;
     }
 
     // Check for ghosts
     if (target_content == 'M') {
-        pthread_rwlock_unlock(&board->board_lock);
         pthread_mutex_unlock(&board->board[new_index].pos_lock);
-        pthread_mutex_unlock(&board->board[old_index].pos_lock);
         kill_pacman(board, pacman_index);
+        pthread_mutex_unlock(&board->board[old_index].pos_lock);
+        pthread_rwlock_unlock(&board->board_lock);
         return DEAD_PACMAN;
     }
 
     // Collect points
     if (board->board[new_index].has_dot) {
+        pthread_mutex_lock(&pac->pac_lock);
         pac->points++;
+        pthread_mutex_unlock(&pac->pac_lock);
         board->board[new_index].has_dot = 0;
     }
 
-    board->board[old_index].content = ' ';
+    pthread_mutex_lock(&pac->pac_lock);
     pac->pos_x = new_x;
     pac->pos_y = new_y;
+    pthread_mutex_unlock(&pac->pac_lock);
+
+    board->board[old_index].content = ' ';
     board->board[new_index].content = 'P';
 
-    pthread_rwlock_unlock(&board->board_lock);
     pthread_mutex_unlock(&board->board[new_index].pos_lock);
     pthread_mutex_unlock(&board->board[old_index].pos_lock);
+    pthread_rwlock_unlock(&board->board_lock);
 
     return VALID_MOVE;
 }
 
 // Helper private function for charged ghost movement in one direction
 static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char direction, int* new_x, int* new_y) {
+
+    pthread_mutex_lock(&ghost->ghost_lock);
+
     int x = ghost->pos_x;
     int y = ghost->pos_y;
+
+    pthread_mutex_unlock(&ghost->ghost_lock);
+    
     *new_x = x;
     *new_y = y;
     
@@ -245,19 +269,25 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
 
 int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     ghost_t* ghost = &board->ghosts[ghost_index];
-    pthread_rwlock_rdlock(&ghost->ghost_lock);
+
+    pthread_mutex_lock(&ghost->ghost_lock);
+
     int old_x = ghost->pos_x;
     int old_y = ghost->pos_y;
-    pthread_rwlock_unlock(&ghost->ghost_lock);
+
     int new_x = old_x;
     int new_y = old_y;
 
-    pthread_rwlock_wrlock(&ghost->ghost_lock);
     ghost->charged = 0; //uncharge
-    pthread_rwlock_unlock(&ghost->ghost_lock);
+
+    pthread_mutex_unlock(&ghost->ghost_lock);
+    
+    pthread_rwlock_wrlock(&board->board_lock);
+
     int result = move_ghost_charged_direction(board, ghost, direction, &new_x, &new_y);
     if (result == INVALID_MOVE) {
         debug("DEFAULT CHARGED MOVE - direction = %c\n", direction);
+        pthread_rwlock_unlock(&board->board_lock);
         return INVALID_MOVE;
     }
 
@@ -273,33 +303,35 @@ int move_ghost_charged(board_t* board, int ghost_index, char direction) {
         pthread_mutex_lock(&board->board[new_index].pos_lock);
     }
 
-    pthread_rwlock_rdlock(&board->board_lock);
 
     // Update board - clear old position (restore what was there)
     board->board[old_index].content = ' '; // Or restore the dot if ghost was on one
-    // Update ghost position
-    pthread_rwlock_wrlock(&ghost->ghost_lock);
 
+    // Update ghost position
     ghost->pos_x = new_x;
     ghost->pos_y = new_y;
     
-    pthread_rwlock_unlock(&ghost->ghost_lock);
     // Update board - set new position
     board->board[new_index].content = 'M';
-    pthread_mutex_unlock(&board->board[old_index].pos_lock);
+
     pthread_mutex_unlock(&board->board[new_index].pos_lock);
+    pthread_mutex_unlock(&board->board[old_index].pos_lock);
     pthread_rwlock_unlock(&board->board_lock);
     return result;
 }
 
 int move_ghost(board_t* board, int ghost_index, command_t* command) {
     ghost_t* ghost = &board->ghosts[ghost_index];
+
+    pthread_mutex_lock(&ghost->ghost_lock);
+
     int new_x = ghost->pos_x;
     int new_y = ghost->pos_y;
 
     // check passo
     if (ghost->waiting > 0) {
         ghost->waiting -= 1;
+        pthread_mutex_unlock(&ghost->ghost_lock);
         return VALID_MOVE;
     }
     ghost->waiting = ghost->passo;
@@ -328,6 +360,7 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
         case 'C': // Charge
             ghost->current_move += 1;
             ghost->charged = 1;
+            pthread_mutex_unlock(&ghost->ghost_lock);
             return VALID_MOVE;
         case 'T': // Wait
             if (command->turns_left == 1) {
@@ -335,18 +368,27 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
                 command->turns_left = command->turns;
             }
             else command->turns_left -= 1;
+            pthread_mutex_unlock(&ghost->ghost_lock);
             return VALID_MOVE;
         default:
+            pthread_mutex_unlock(&ghost->ghost_lock);
             return INVALID_MOVE; // Invalid direction
     }
 
     // Logic for the WASD movement
     ghost->current_move++;
-    if (ghost->charged)
-        return move_ghost_charged(board, ghost_index, direction);
+    if (ghost->charged) {
+        pthread_mutex_unlock(&ghost->ghost_lock);
+        int result = move_ghost_charged(board, ghost_index, direction);
+        return result;
+    }
+    pthread_mutex_unlock(&ghost->ghost_lock);
+
+    pthread_rwlock_rdlock(&board->board_lock);
 
     // Check boundaries
     if (!is_valid_position(board, new_x, new_y)) {
+        pthread_rwlock_unlock(&board->board_lock);
         return INVALID_MOVE;
     }
 
@@ -354,7 +396,7 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
     int new_index = get_board_index(board, new_x, new_y);
     int old_index = get_board_index(board, ghost->pos_x, ghost->pos_y);
 
-    pthread_rwlock_rdlock(&board->board_lock);
+
     if (new_index < old_index) {
         pthread_mutex_lock(&board->board[new_index].pos_lock);
         pthread_mutex_lock(&board->board[old_index].pos_lock);
@@ -367,6 +409,9 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
 
     // Check for walls and ghosts
     if (target_content == 'W' || target_content == 'M') {
+        pthread_mutex_unlock(&board->board[new_index].pos_lock);
+        pthread_mutex_unlock(&board->board[old_index].pos_lock);
+        pthread_rwlock_unlock(&board->board_lock);
         return INVALID_MOVE;
     }
 
@@ -376,13 +421,14 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
         result = find_and_kill_pacman(board, new_x, new_y);
     }
 
-    // Update board - clear old position (restore what was there)
-    board->board[old_index].content = ' '; // Or restore the dot if ghost was on one
-
+    pthread_mutex_lock(&ghost->ghost_lock);
     // Update ghost position
     ghost->pos_x = new_x;
     ghost->pos_y = new_y;
-
+    pthread_mutex_unlock(&ghost->ghost_lock);
+    
+    // Update board - clear old position (restore what was there)
+    board->board[old_index].content = ' '; // Or restore the dot if ghost was on one
     // Update board - set new position
     board->board[new_index].content = 'M';
 
@@ -396,19 +442,18 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
 void kill_pacman(board_t* board, int pacman_index) {
     debug("Killing %d pacman\n\n", pacman_index);
     pacman_t* pac = &board->pacmans[pacman_index];
+    
     int index = pac->pos_y * board->width + pac->pos_x;
 
-    pthread_mutex_lock(&board->board[index].pos_lock);
-    pthread_rwlock_rdlock(&board->board_lock);
+    pthread_mutex_lock(&pac->pac_lock);
     // Remove pacman from the board
     board->board[index].content = ' ';
-    pthread_rwlock_unlock(&board->board_lock);
-    pthread_mutex_unlock(&board->board[index].pos_lock);
 
-    pthread_rwlock_wrlock(&pac->pac_lock);
     // Mark pacman as dead
     pac->alive = 0;
-    pthread_rwlock_unlock(&pac->pac_lock);
+    pthread_mutex_unlock(&pac->pac_lock);
+
+    return;
 }
 
 
@@ -434,7 +479,7 @@ void load_file_pacman(board_t* board, int points) {
         pacman_t* pac = &board->pacmans[0];
         pac->points = points;
         pac->alive = 1;
-        pthread_rwlock_init(&pac->pac_lock, NULL);
+        pthread_mutex_init(&pac->pac_lock, NULL);
         read_file(board, board->pacman_file, PACMAN, 0);
         board->board[pac->pos_y * board->width + pac->pos_x].content = 'P';
     }
@@ -483,7 +528,7 @@ void load_file_ghost(board_t* board) {
         for (int i = 0; i < board->n_ghosts; i++) {
             read_file(board, board->ghosts_files[i], GHOST, i);
             ghost_t* ghost = &board->ghosts[i];
-            pthread_rwlock_init(&ghost->ghost_lock, NULL);
+            pthread_mutex_init(&ghost->ghost_lock, NULL);
             board->board[ghost->pos_y * board->width + ghost->pos_x].content = 'M';
         }
     }
