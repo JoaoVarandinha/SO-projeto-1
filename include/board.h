@@ -1,6 +1,8 @@
 #ifndef BOARD_H
 #define BOARD_H
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <dirent.h>
 #include <pthread.h>
 
