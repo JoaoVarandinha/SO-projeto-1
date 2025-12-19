@@ -33,7 +33,7 @@ void *display_thread(void* arg) {
     while (true) {
 
         sleep_ms(board->tempo);
-        
+
         pthread_rwlock_wrlock(&board->board_lock);
         if (board->shutdown_threads) {
             pthread_rwlock_unlock(&board->board_lock);
@@ -41,14 +41,6 @@ void *display_thread(void* arg) {
         }
         screen_refresh(board, DRAW_MENU);
         pthread_rwlock_unlock(&board->board_lock);
-
-
-        char c = get_input();
-        if (c != '\0') {
-            pthread_mutex_lock(&board->info.info_lock);
-            board->info.move_input = c;
-            pthread_mutex_unlock(&board->info.info_lock);
-        }
     }
 }
 
@@ -66,25 +58,15 @@ void *pacman_thread(void* arg) {
 
         sleep_ms(board->tempo);
 
-            command_t* play;
-            command_t c;
-            if (pacman->n_moves == 0) { // if is user input
+        command_t* play;
+        command_t c;
+        if (pacman->n_moves == 0) { // if is user input
 
-                while (true) {
-                    pthread_mutex_lock(&board->info.info_lock);
-                    if (board->info.move_input != '\0') {
-                        c.command = board->info.move_input;
-                        board->info.move_input = '\0';
-                        pthread_mutex_unlock(&board->info.info_lock);
-                        break;
-                    }
-                    pthread_mutex_unlock(&board->info.info_lock);
-                    if (!pacman->alive) {
-                        *play_result = LOAD_BACKUP;
-                        return (void*) play_result;
-                    }
-                    sleep(board->tempo / 2);
-                }
+            c.command = get_input();
+
+            if(c.command == '\0') {
+                continue;
+            }
 
             c.turns = 1;
             play = &c;
