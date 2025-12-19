@@ -40,7 +40,6 @@ typedef struct {
     int current_move;
     int n_moves; // number of predefined moves, 0 if controlled by user, >0 if readed from level file
     int waiting;
-    pthread_mutex_t pac_lock; // lock for pacman
 } pacman_t;
 
 typedef struct {
@@ -51,7 +50,6 @@ typedef struct {
     int current_move;
     int waiting;
     int charged;
-    pthread_mutex_t ghost_lock; // lock for ghost
 } ghost_t;
 
 typedef struct {
@@ -62,9 +60,7 @@ typedef struct {
 } board_pos_t;
 
 typedef struct {
-    int result; // result of last move
     char move_input; // last move input
-    pthread_cond_t input_ready; // condition for pacman thread to wait for input
     pthread_mutex_t info_lock; // lock for game info
 } game_info;
 
@@ -79,9 +75,10 @@ typedef struct {
     char pacman_file[MAX_FILENAME];  // file with pacman movements
     char ghosts_files[MAX_GHOSTS][MAX_FILENAME]; // files with monster movements
     char dir_name[MAX_DIRLENGTH];     // name of directory with info files
-    int tempo;              // Duration of each play
+    int tempo;              // duration of each play
     pthread_rwlock_t board_lock; // global lock for the board
-    game_info info; // game info for threads
+    game_info info;         // game info for threads
+    int shutdown_threads;   // thread shutdown flag
 } board_t;
 
 /*Makes the current thread sleep for 'int milliseconds' miliseconds*/

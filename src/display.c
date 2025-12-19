@@ -17,6 +17,8 @@ int terminal_init() {
     // Enable special keys (arrow keys, function keys, etc.)
     keypad(stdscr, TRUE);
 
+    //timeout(1000);
+
     // Make getch() non-blocking (return ERR if no input)
     nodelay(stdscr, TRUE); // Uncomment if non-blocking input is desired
 
@@ -78,14 +80,11 @@ void draw_board(board_t* board, int mode) {
 
             for (int g = 0; g < board->n_ghosts; g++) {
                 ghost_t* ghost = &board->ghosts[g];
-                pthread_mutex_lock(&ghost->ghost_lock);
                 if (ghost->pos_x == x && ghost->pos_y == y) {
                     if (ghost->charged)
                         ghost_charged = 1;
-                    pthread_mutex_unlock(&ghost->ghost_lock);
                     break;
                 }
-                pthread_mutex_unlock(&ghost->ghost_lock);
             }
 
             // Move cursor to position
@@ -135,10 +134,8 @@ void draw_board(board_t* board, int mode) {
 
     // Draw score/status at the bottom
     attron(COLOR_PAIR(5));
-    pthread_mutex_lock(&board->pacmans[0].pac_lock);
     mvprintw(start_row + board->height + 1, 0, "Points: %d",
              board->pacmans[0].points); // Assuming first pacman for now
-    pthread_mutex_unlock(&board->pacmans[0].pac_lock);
     attroff(COLOR_PAIR(5));
 }
 

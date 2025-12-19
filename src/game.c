@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <dirent.h>
 #include <string.h>
 #include <sys/types.h>
@@ -24,44 +25,23 @@ void screen_refresh(board_t * game_board, int mode) {
     debug("REFRESH\n");
     draw_board(game_board, mode);
     refresh_screen();
-    if (game_board->tempo != 0)
-        sleep_ms(game_board->tempo);       
-}
-
-int check_result(board_t* board) {
-    game_info* info = &board->info;
-
-    pthread_mutex_lock(&info->info_lock);
-    int res = info->result;
-    pthread_mutex_unlock(&info->info_lock);
-
-    return res;
-}
-
-void set_result(board_t* board, int res) {
-    game_info* info = &board->info;
-
-    pthread_mutex_lock(&info->info_lock);
-    if (board->info.result == CONTINUE_PLAY) {
-        info->result = res;
-    }
-    pthread_mutex_unlock(&info->info_lock);
-
-    return;
 }
 
 void *display_thread(void* arg) {
     board_t *board = (board_t*)arg;
     
-    while (check_result(board) == CONTINUE_PLAY) {
+    while (true) {
 
+        sleep_ms(board->tempo);
+        
         pthread_rwlock_wrlock(&board->board_lock);
-
-        debug("REFRESH\n");
-        draw_board(board, DRAW_MENU);
-        refresh_screen();
-
+        if (board->shutdown_threads) {
+            pthread_rwlock_unlock(&board->board_lock);
+            pthread_exit(NULL);
+        }
+        screen_refresh(board, DRAW_MENU);
         pthread_rwlock_unlock(&board->board_lock);
+
 
         char c = get_input();
         if (c != '\0') {
@@ -69,17 +49,22 @@ void *display_thread(void* arg) {
             board->info.move_input = c;
             pthread_mutex_unlock(&board->info.info_lock);
         }
-
-        sleep_ms(board->tempo); 
     }
-    return NULL;
 }
 
 void *pacman_thread(void* arg) {
     board_t* board = (board_t*)arg;
     pacman_t* pacman = &board->pacmans[0];
 
-        while (check_result(board) == CONTINUE_PLAY) {
+    int *play_result = malloc(sizeof(int));
+
+    while (true) {
+        if (!pacman->alive) {
+            *play_result = LOAD_BACKUP;
+            return (void*) play_result;
+        }
+
+        sleep_ms(board->tempo);
 
             command_t* play;
             command_t c;
@@ -87,21 +72,23 @@ void *pacman_thread(void* arg) {
 
                 while (true) {
                     pthread_mutex_lock(&board->info.info_lock);
-                    if (board->info.move_input == '\0') {
+                    if (board->info.move_input != '\0') {
+                        c.command = board->info.move_input;
+                        board->info.move_input = '\0';
                         pthread_mutex_unlock(&board->info.info_lock);
-                        sleep_ms(board->tempo);
-                        continue;
+                        break;
                     }
-                    c.command = board->info.move_input;
-                    board->info.move_input = '\0';
                     pthread_mutex_unlock(&board->info.info_lock);
-                    break;
+                    if (!pacman->alive) {
+                        *play_result = LOAD_BACKUP;
+                        return (void*) play_result;
+                    }
+                    sleep(board->tempo / 2);
                 }
 
             c.turns = 1;
             play = &c;
-        }
-        else { // else if the moves are pre-defined in the file
+        } else { // else if the moves are pre-defined in the file
             // avoid buffer overflow wrapping around with modulo of n_moves
             // this ensures that we always access a valid move for the pacman
             play = &pacman->moves[pacman->current_move%pacman->n_moves];
@@ -110,55 +97,59 @@ void *pacman_thread(void* arg) {
         debug("KEY %c\n", play->command);
 
         if (play->command == 'Q') {
-            set_result(board, QUIT_GAME);
-            break;
+            *play_result = LOAD_BACKUP;
+            return (void*) play_result;
         }
 
         if (play->command == 'G') {
             pacman->current_move++;
-            set_result(board, CREATE_BACKUP);
-            break;
+            *play_result = CREATE_BACKUP;
+            return (void*) play_result;
         }
 
+        pthread_rwlock_rdlock(&board->board_lock);
+
         int result = move_pacman(board, 0, play);
+
         if (result == REACHED_PORTAL) {
             // Next level
-            set_result(board, NEXT_LEVEL);
+            *play_result = NEXT_LEVEL;
             break;
         }
 
         if (result == DEAD_PACMAN) {
-            set_result(board, QUIT_GAME);
+            *play_result = QUIT_GAME;
             break;
         }
-
-        sleep_ms(board->tempo);
-
+        pthread_rwlock_unlock(&board->board_lock);
     }
+    pthread_rwlock_unlock(&board->board_lock);
 
-    return NULL;
+    return (void*) play_result;
 }
 
 void *ghost_thread(void* arg) {
     ghost_thread_args* args = (ghost_thread_args*)arg;
     board_t* board = args->board;
-    ghost_t* ghost = &board->ghosts[args->ghost_idx];
+    int ghost_idx = args->ghost_idx;
 
-    while (check_result(board) == CONTINUE_PLAY) {
-        sleep_ms(board->tempo);
-        
-        int result = move_ghost(board, args->ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
-        
-        if (result == DEAD_PACMAN) {
-            set_result(board, QUIT_GAME);
-            break;
-        }
-
-    }
-    
     free(args);
 
-    return NULL;
+    ghost_t* ghost = &board->ghosts[ghost_idx];
+
+    while (true) {
+        sleep_ms(board->tempo);
+
+        pthread_rwlock_rdlock(&board->board_lock);
+
+        if (board->shutdown_threads) {
+            pthread_rwlock_unlock(&board->board_lock);
+            pthread_exit(NULL);
+        }
+        
+        move_ghost(board, ghost_idx, &ghost->moves[ghost->current_move%ghost->n_moves]);
+        pthread_rwlock_unlock(&board->board_lock);
+    }
 }
 
 int play_board(board_t* game_board) {
@@ -219,6 +210,8 @@ int play_board(board_t* game_board) {
 int play_board_threads(board_t* board) {
     pthread_t display_tid, pac_tid, ghost_tid[MAX_GHOSTS];
 
+    board->shutdown_threads = 0;
+
     pthread_create(&display_tid, NULL, display_thread, board);
     pthread_create(&pac_tid, NULL, pacman_thread, board); //Start pacman thread
     for (int i = 0; i < board->n_ghosts; i++) {
@@ -230,14 +223,23 @@ int play_board_threads(board_t* board) {
         pthread_create(&ghost_tid[i], NULL, ghost_thread, args);
     }
 
+    int *play_result;
+    pthread_join(pac_tid, (void**)&play_result);
 
+    pthread_rwlock_wrlock(&board->board_lock);
+    board->shutdown_threads = 1;
+    pthread_rwlock_unlock(&board->board_lock);
+
+    
     pthread_join(display_tid, NULL);
-    pthread_join(pac_tid, NULL);
     for (int i = 0; i < board->n_ghosts; i++) {
         pthread_join(ghost_tid[i], NULL);
     }
 
-    return board->info.result;
+    int result = *play_result;
+    free(play_result);
+
+    return result;
 }
 
 
@@ -291,6 +293,7 @@ int main(int argc, char** argv) {
     } else {
 
         strcpy(game_board.dir_name, argv[1]);
+        strcat(game_board.dir_name, "/");
         DIR* dir = opendir(argv[1]);
         if (!dir) {
             perror("Error opening directory");
@@ -302,8 +305,6 @@ int main(int argc, char** argv) {
         while (!end_game && (entry = readdir(dir)) != NULL) {
             len = strlen(entry->d_name);
             if (len <= 4 || strcmp(entry->d_name + len - 4, LEVEL) != 0) continue;
-            
-            game_board.info.result = CONTINUE_PLAY;
 
             strcpy(game_board.pacman_file, "");
             strcpy(game_board.ghosts_files[0], "");
@@ -320,7 +321,7 @@ int main(int argc, char** argv) {
             pthread_rwlock_init(&game_board.board_lock, NULL);
             pthread_mutex_init(&game_board.info.info_lock, NULL);
 
-            while(true) {
+            while (true) {
 
                 int result = play_board_threads(&game_board);
 
@@ -329,16 +330,20 @@ int main(int argc, char** argv) {
                     sleep_ms(game_board.tempo);
                     break;
                 }
+
+                if (result == LOAD_BACKUP) {
+                    if (pid == 0) {
+                        unload_level(&game_board);
+                        exit(LOAD_BACKUP);
+                    } else {
+                        result = QUIT_GAME;
+                    }
+                }
     
                 if (result == QUIT_GAME) {
                     if (pid == 0) {
-                        if (game_board.pacmans[0].alive) {
-                            unload_level(&game_board);
-                            exit(QUIT_GAME);
-                        } else {
-                            unload_level(&game_board);
-                            exit(LOAD_BACKUP);
-                        }
+                        unload_level(&game_board);
+                        exit(QUIT_GAME);
                     }
                     screen_refresh(&game_board, DRAW_GAME_OVER); 
                     sleep_ms(game_board.tempo);
@@ -356,7 +361,6 @@ int main(int argc, char** argv) {
                             //screen_refresh(&game_board, DRAW_MENU);
                             //sleep_ms(game_board.tempo);
                             //apagar as 2 linhas de cima e fzr:
-                            game_board.info.result = CONTINUE_PLAY;
                             continue;
                         } else {
                             int status;
@@ -367,7 +371,6 @@ int main(int argc, char** argv) {
                                     break; 
                                 } else if (WEXITSTATUS(status) == LOAD_BACKUP) {
                                     //apagar o sleep q vem a seguir para dentro do else if e fzr:
-                                    game_board.info.result = CONTINUE_PLAY;
                                     screen_refresh(&game_board, DRAW_MENU);
                                     //sleep_ms(game_board.tempo);
                                     continue;
@@ -377,18 +380,14 @@ int main(int argc, char** argv) {
                             exit(EXIT_FAILURE);
                             }
                         }
-                    } else {
-                    game_board.info.result = CONTINUE_PLAY;
-                    continue;
                     }
                 }
-
             }
 
-            accumulated_points = game_board.pacmans[0].points;
+        accumulated_points = game_board.pacmans[0].points;
 
-            print_board(&game_board);
-            unload_level(&game_board);
+        print_board(&game_board);
+        unload_level(&game_board);
 
         }
 
@@ -403,4 +402,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
