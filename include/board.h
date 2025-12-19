@@ -40,6 +40,7 @@ typedef struct {
     int current_move;
     int n_moves; // number of predefined moves, 0 if controlled by user, >0 if readed from level file
     int waiting;
+    pthread_mutex_t pac_lock; // lock for pacman
 } pacman_t;
 
 typedef struct {
@@ -60,11 +61,6 @@ typedef struct {
 } board_pos_t;
 
 typedef struct {
-    char move_input; // last move input
-    pthread_mutex_t info_lock; // lock for game info
-} game_info;
-
-typedef struct {
     int width, height;      // dimensions of the board
     board_pos_t* board;     // actual board, a row-major matrix
     int n_pacmans;          // number of pacmans in the board
@@ -77,7 +73,6 @@ typedef struct {
     char dir_name[MAX_DIRLENGTH];     // name of directory with info files
     int tempo;              // duration of each play
     pthread_rwlock_t board_lock; // global lock for the board
-    game_info info;         // game info for threads
     int shutdown_threads;   // thread shutdown flag
 } board_t;
 

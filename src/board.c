@@ -16,10 +16,13 @@ static int find_and_kill_pacman(board_t* board, int new_x, int new_y) {
 
     for (int p = 0; p < board->n_pacmans; p++) {
         pacman_t* pac = &board->pacmans[p];
+        pthread_mutex_lock(&pac->pac_lock);
         if (pac->pos_x == new_x && pac->pos_y == new_y && pac->alive) {
             kill_pacman(board, p);
+            pthread_mutex_unlock(&pac->pac_lock);
             return DEAD_PACMAN;
         }
+        pthread_mutex_unlock(&pac->pac_lock);
     }
 
     return VALID_MOVE;
@@ -45,10 +48,12 @@ void sleep_ms(int milliseconds) {
 int move_pacman(board_t* board, int pacman_index, command_t* command) {
     pacman_t* pac = &board->pacmans[pacman_index];
 
+    pthread_mutex_lock(&pac->pac_lock);
     if (pacman_index < 0 || !pac->alive) {
         return DEAD_PACMAN; // Invalid or dead pacman
     }
-        
+    pthread_mutex_unlock(&pac->pac_lock);
+    
     int new_x = pac->pos_x;
     int new_y = pac->pos_y;
 
@@ -131,7 +136,9 @@ int move_pacman(board_t* board, int pacman_index, command_t* command) {
 
     // Check for ghosts
     if (target_content == 'M') {
+        pthread_mutex_lock(&pac->pac_lock);
         kill_pacman(board, pacman_index);
+        pthread_mutex_unlock(&pac->pac_lock);
         pthread_mutex_unlock(&board->board[new_index].pos_lock);
         pthread_mutex_unlock(&board->board[old_index].pos_lock);
         return DEAD_PACMAN;
@@ -426,7 +433,8 @@ int move_ghost(board_t* board, int ghost_index, command_t* command) {
 void kill_pacman(board_t* board, int pacman_index) {
     debug("Killing %d pacman\n\n", pacman_index);
     pacman_t* pac = &board->pacmans[pacman_index];
-    
+
+
     int index = pac->pos_y * board->width + pac->pos_x;
 
     // Remove pacman from the board
@@ -458,6 +466,7 @@ void load_file_pacman(board_t* board, int points) {
 
     pac->points = points;
     pac->alive = 1;
+    pthread_mutex_init(&pac->pac_lock, NULL);
 
     if (strcmp(board->pacman_file, "") == 0) {
         load_static_pacman(board);
@@ -742,8 +751,7 @@ int load_static_level(board_t *board, int points) {
 
 void unload_level(board_t * board) {
     pthread_rwlock_destroy(&board->board_lock);
-    pthread_mutex_destroy(&board->info.info_lock);
-
+    pthread_mutex_destroy(&board->pacmans[0].pac_lock);
     for (int i = 0; i < board->width * board->height; i++) {
         pthread_mutex_destroy(&board->board[i].pos_lock);
     }
