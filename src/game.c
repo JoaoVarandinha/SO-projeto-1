@@ -91,7 +91,7 @@ void *pacman_thread(void* arg) {
         debug("KEY %c\n", play->command);
 
         if (play->command == 'Q') {
-            *play_result = LOAD_BACKUP;
+            *play_result = QUIT_GAME;
             return (void*) play_result;
         }
 
@@ -112,7 +112,7 @@ void *pacman_thread(void* arg) {
         }
 
         if (result == DEAD_PACMAN) {
-            *play_result = QUIT_GAME;
+            *play_result = LOAD_BACKUP;
             break;
         }
         pthread_rwlock_unlock(&board->board_lock);
@@ -260,18 +260,18 @@ int main(int argc, char** argv) {
     pid_t pid = -1;
     board_t game_board;
 
-    strcpy(game_board.dir_name, argv[1]);
-    strcat(game_board.dir_name, "/");
     DIR* dir = opendir(argv[1]);
     if (!dir) {
         perror("Error opening directory");
         exit(EXIT_FAILURE);
     }
-    struct dirent* entry;
-    int len;
 
+    strcpy(game_board.dir_name, argv[1]);
+    strcat(game_board.dir_name, "/");
+    
+    struct dirent* entry;
     while (!end_game && (entry = readdir(dir)) != NULL) {
-        len = strlen(entry->d_name);
+        int len = strlen(entry->d_name);
         if (len <= 4 || strcmp(entry->d_name + len - 4, LEVEL) != 0) continue;
 
         strcpy(game_board.pacman_file, "");
@@ -300,6 +300,7 @@ int main(int argc, char** argv) {
 
             if (result == LOAD_BACKUP) {
                 if (pid == 0) {
+                    terminal_cleanup();
                     unload_level(&game_board);
                     exit(LOAD_BACKUP);
                 } else {
@@ -309,6 +310,7 @@ int main(int argc, char** argv) {
 
             if (result == QUIT_GAME) {
                 if (pid == 0) {
+                    terminal_cleanup();
                     unload_level(&game_board);
                     exit(QUIT_GAME);
                 }
@@ -325,9 +327,7 @@ int main(int argc, char** argv) {
                             perror("Error forking");
                             exit(EXIT_FAILURE);
                     } else if (pid == 0) {
-                        //screen_refresh(&game_board, DRAW_MENU);
-                        //sleep_ms(game_board.tempo);
-                        //apagar as 2 linhas de cima e fzr:
+                        screen_refresh(&game_board, DRAW_MENU);
                         continue;
                     } else {
                         int status;
@@ -337,9 +337,7 @@ int main(int argc, char** argv) {
                                 end_game = true;
                                 break; 
                             } else if (WEXITSTATUS(status) == LOAD_BACKUP) {
-                                //apagar o sleep q vem a seguir para dentro do else if e fzr:
                                 screen_refresh(&game_board, DRAW_MENU);
-                                //sleep_ms(game_board.tempo);
                                 continue;
                             }
                         } else {
