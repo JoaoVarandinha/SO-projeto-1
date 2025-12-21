@@ -1,4 +1,5 @@
 #include "board.h"
+#include "parser.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -7,7 +8,6 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <string.h>
-#include <pthread.h>
 
 FILE * debugfile;
 
@@ -456,19 +456,7 @@ void kill_pacman(board_t* board, int pacman_index) {
 }
 
 
-// Static Loading
-void load_static_pacman(board_t* board) {
-    int i;
-    for (i = 0; i < board->width * board->height; i++) {
-            if (board->board[i].content == ' ' && board->board[i].has_dot) break;
-    }
-    board->board[i].content = 'P'; // Pacman
-    board->pacmans[0].pos_x = i % board->width;
-    board->pacmans[0].pos_y = i / board->width;
-    return;
-}
-
-void load_file_pacman(board_t* board, int points) {
+void load_pacman(board_t* board, int points) {
     board->n_pacmans = 1;
     board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
     pacman_t* pac = &board->pacmans[0];
@@ -477,285 +465,39 @@ void load_file_pacman(board_t* board, int points) {
     pac->alive = 1;
     pthread_mutex_init(&pac->pac_lock, NULL);
 
-    if (strcmp(board->pacman_file, "") == 0) {
-        load_static_pacman(board);
+    int idx;
+    if (board->n_pacmans == 0) {
+        for (idx = 0; idx < board->width * board->height; idx++) {
+            if (board->board[idx].content == ' ' && board->board[idx].has_dot) break;
+        }
+        board->pacmans[0].pos_x = idx % board->width;
+        board->pacmans[0].pos_y = idx / board->width;
     } else {
         read_file(board, board->pacman_file, PACMAN, 0);
-        board->board[pac->pos_y * board->width + pac->pos_x].content = 'P';
+        idx = pac->pos_y * board->width + pac->pos_x;
     }
-    return;
+    board->board[idx].content = 'P';
 }
 
-
-// Static Loading
-void load_static_ghost(board_t* board) {
-    // Ghost 0
-    board->board[3 * board->width + 1].content = 'M'; // Monster
-    board->ghosts[0].pos_x = 1;
-    board->ghosts[0].pos_y = 3;
-    board->ghosts[0].passo = 0;
-    board->ghosts[0].waiting = 0;
-    board->ghosts[0].current_move = 0;
-    board->ghosts[0].n_moves = 16;
-    for (int i = 0; i < 8; i++) {
-        board->ghosts[0].moves[i].command = 'D';
-        board->ghosts[0].moves[i].turns = 1; 
-    }
-    for (int i = 8; i < 16; i++) {
-        board->ghosts[0].moves[i].command = 'A';
-        board->ghosts[0].moves[i].turns = 1; 
-    }
-
-    // Ghost 1
-    board->board[2 * board->width + 4].content = 'M'; // Monster
-    board->ghosts[1].pos_x = 4;
-    board->ghosts[1].pos_y = 2;
-    board->ghosts[1].passo = 1;
-    board->ghosts[1].waiting = 1;
-    board->ghosts[1].current_move = 0;
-    board->ghosts[1].n_moves = 1;
-    board->ghosts[1].moves[0].command = 'R'; // Random
-    board->ghosts[1].moves[0].turns = 1;
-
-    return;
-}
-
-void load_file_ghost(board_t* board) {
-    board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
-    if (strcmp(board->ghosts_files[0], "") == 0) {
-        load_static_ghost(board);
-    } else {
-        for (int i = 0; i < board->n_ghosts; i++) {
-            read_file(board, board->ghosts_files[i], GHOST, i);
-            ghost_t* ghost = &board->ghosts[i];
-            board->board[ghost->pos_y * board->width + ghost->pos_x].content = 'M';
-        }
-    }
-    return;
-}
-
-
-void process_level_instruction(board_t* board, char* instruction, int* num) {
-    switch (instruction[0]) {
-
-        case 'D': {
-            sscanf(instruction, "DIM %d %d", &board->width, &board->height);
-            board->board = calloc(board->width * board->height, sizeof(board_pos_t));
-            return;
-        }
-
-        case 'T': {
-            sscanf(instruction, "TEMPO %d", &board->tempo);
-            return;
-        }
-
-        case 'P': {
-            sscanf(instruction, "PAC %s", board->pacman_file);
-            return;
-        }   
-
-        case 'M': {
-            int counter = 0;
-            char* filename = strtok(instruction, " ");
-            while ((filename = strtok(NULL, " ")) != NULL) {
-                strcpy(board->ghosts_files[counter], filename);
-                counter++;
-            }
-
-            board->n_ghosts = counter;
-            return;
-        }
-
-        default: {
-            for (int i = 0; i < board->width; i++) {
-                pthread_mutex_init(&board->board[(*num) * board->width + i].pos_lock, NULL);
-                switch (instruction[i]) {
-                    case 'X': board->board[(*num) * board->width + i].content = 'W';
-                              break;
-                    case 'o': board->board[(*num) * board->width + i].content = ' ';
-                              board->board[(*num) * board->width + i].has_dot = TRUE;
-                              break;
-                    case '@': board->board[(*num) * board->width + i].content = ' ';
-                              board->board[(*num) * board->width + i].has_portal = TRUE;
-                              break;
-                }
-            }
-            (*num)++;
-            return;
-        }
-    }
-}
-
-void process_pacman_instruction(board_t* board, char* instruction) {
-    pacman_t* pac = &board->pacmans[0];
-    switch (instruction[0]) {
-        case 'P': {
-            switch (instruction[1]) {
-                case 'A': {
-                    sscanf(instruction, "PASSO %d", &pac->passo);
-                    return;
-                }
-                case 'O': {
-                    sscanf(instruction, "POS %d %d", &pac->pos_x, &pac->pos_y);
-                    return;
-                }
-            }
-            exit(EXIT_FAILURE);
-        }
-
-        default: {
-            command_t cmd;
-            cmd.command = instruction[0];
-            cmd.turns = 1;
-            if (instruction[0] == 'T') {
-                sscanf(instruction, "T %d", &cmd.turns);
-                cmd.turns_left = cmd.turns;
-            }
-
-            pac->moves[pac->n_moves++] = cmd;
-
-            return;
-        }
-    }
-}
-
-void process_ghost_instruction(board_t* board, char* instruction, int num) {
-    ghost_t* ghost = &board->ghosts[num];
-    switch (instruction[0]) {
-        case 'P': {
-            switch (instruction[1]) {
-                case 'A': {
-                    sscanf(instruction, "PASSO %d", &ghost->passo);
-                    return;
-                }
-                case 'O': {
-                    sscanf(instruction, "POS %d %d", &ghost->pos_x, &ghost->pos_y);
-                    return;
-                }
-            }
-            exit(EXIT_FAILURE);
-        }
-
-        default: {
-            command_t cmd;
-            cmd.command = instruction[0];
-            cmd.turns = 1;
-            if (instruction[0] == 'T') {
-                sscanf(instruction, "T %d", &cmd.turns);
-                cmd.turns_left = cmd.turns;
-            }
-            ghost->moves[ghost->n_moves++] = cmd;
-
-            return;
-        }
-
-    }
-}
-
-void process_instruction(board_t* board, char* instruction, char* filetype, int* num) {
-    if (instruction[0] == '#' || strcmp(instruction, "") == 0) return;
-
-    switch (filetype[1]) {
-        case 'l': process_level_instruction(board, instruction, num); return;
-        case 'p': process_pacman_instruction(board, instruction); return;
-        case 'm': process_ghost_instruction(board, instruction, *num); return;
-    }
-}
-
-void read_file(board_t* board, char* filename, char* filetype, int num) {
-    //Go to correct directory and find the file before opening it
-    char dirfilename[MAX_FILENAME + MAX_DIRLENGTH];
-    sprintf(dirfilename, "%s%s", board->dir_name, filename);
-    int file = open(dirfilename, O_RDONLY);
-    if (file == -1) {
-        perror("Error opening file");
+void load_ghosts(board_t* board) {
+    if (board->n_ghosts == 0) {
         exit(EXIT_FAILURE);
+    } 
+    board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
+    for (int i = 0; i < board->n_ghosts; i++) {
+        read_file(board, board->ghosts_files[i], GHOST, i);
+        ghost_t* ghost = &board->ghosts[i];
+        board->board[ghost->pos_y * board->width + ghost->pos_x].content = 'M';
     }
-
-    ssize_t bytesRead;
-    char buf[MAXLINELENGTH]; //Initialize buffer
-    char instruction[MAXLINELENGTH + MAXLINELENGTH];
-    char leftovers[MAXLINELENGTH] = ""; //Initialize leftovers buffer
-    int len = sizeof(buf); //Get amount of bytes to read
-    while (TRUE) {
-        int done = 0; //Set read bytes to 0
-        while (done < len) { //Read until buffer is full or EOF is reached
-            bytesRead = read(file, buf + done, len - done);
-            if (bytesRead == -1) { //Error if can't read
-                perror("Error reading level file");
-                close(file);
-                return;
-            }
-            if (bytesRead == 0) break; //EOF reached
-            
-            done += bytesRead;
-        }
-
-        if (done == 0) break; //EOF reached
-        
-        int start = 0;
-        for (int i = 0; i < done; i++) {
-            if (buf[i] == '\n') { //Search for tokens
-                strcpy(instruction, leftovers); //Copy the previous leftovers
-                strncat(instruction, buf + start, i - start); //Append the new token to the leftovers
-
-                process_instruction(board, instruction, filetype, &num); //Process the instruction
-
-                leftovers[0] = '\0'; //Reset leftovers from previous buffer
-                start = i + 1; //Move to next token
-            }
-        }
-
-        if (start < done) { // Check for leftovers
-            int curr_leftover_len = strlen(leftovers);
-            int new_leftover_len = done - start; //Get the length of the leftovers
-            strncat(leftovers, buf + start, new_leftover_len); //Copy the leftovers to the leftovers variable
-            leftovers[curr_leftover_len + new_leftover_len] = '\0'; //Add null terminator
-        }
-    }
-
-    if (leftovers[0] != '\0') { //Check for leftovers after file ends
-        process_instruction(board, leftovers, filetype, &num); //Process leftovers
-    }
-    close(file);
 }
 
+void load_level(board_t* board, char* filename) {
+    board->n_pacmans = 0;
+    board->n_ghosts = 0;
+    strcpy(board->level_name, filename);
+    pthread_rwlock_init(&board->board_lock, NULL);
 
-int load_static_level(board_t *board, int points) {
-    board->height = 5;
-    board->width = 10;
-    board->tempo = 10;
-
-    board->n_ghosts = 2;
-    board->n_pacmans = 1;
-
-    board->board = calloc(board->width * board->height, sizeof(board_pos_t));
-    board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
-    board->ghosts = calloc(board->n_ghosts, sizeof(ghost_t));
-
-    sprintf(board->level_name, "Static Level");
-
-    for (int i = 0; i < board->height; i++) {
-        for (int j = 0; j < board->width; j++) {
-            if (i == 0 || j == 0 || j == (board->width - 1)) {
-                board->board[i * board->width + j].content = 'W';
-            }
-            else if (i == 4 && j == 8) {
-                board->board[i * board->width + j].content = ' ';
-                board->board[i * board->width + j].has_portal = 1;
-            }
-            else {
-                board->board[i * board->width + j].content = ' ';
-                board->board[i * board->width + j].has_dot = 1;
-            }
-        }
-    }
-
-    load_static_ghost(board);
-    board->pacmans[0].points = points;
-    load_static_pacman(board);
-
-    return 0;
+    read_file(board, filename, LEVEL, 0);
 }
 
 void unload_level(board_t * board) {

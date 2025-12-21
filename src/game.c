@@ -267,26 +267,18 @@ int main(int argc, char** argv) {
     }
 
     strcpy(game_board.dir_name, argv[1]);
-    strcat(game_board.dir_name, "/");
     
     struct dirent* entry;
     while (!end_game && (entry = readdir(dir)) != NULL) {
         int len = strlen(entry->d_name);
         if (len <= 4 || strcmp(entry->d_name + len - 4, LEVEL) != 0) continue;
 
-        strcpy(game_board.pacman_file, "");
-        strcpy(game_board.ghosts_files[0], "");
-
-        read_file(&game_board, entry->d_name, LEVEL, 0);
-        strcpy(game_board.level_name, entry->d_name);
-        
-        load_file_pacman(&game_board,accumulated_points);
-        load_file_ghost(&game_board);
+        load_level(&game_board, entry->d_name);
+        load_pacman(&game_board,accumulated_points);
+        load_ghosts(&game_board);
         
         draw_board(&game_board, DRAW_MENU);
         refresh_screen();
-
-        pthread_rwlock_init(&game_board.board_lock, NULL);
 
         while (true) {
 

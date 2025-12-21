@@ -96,18 +96,9 @@ void load_static_pacman(board_t* board);
 void load_file_pacman(board_t* board, int points);
 
 
-/*Adds a static ghost(monster) to the board*/
-void load_static_ghost(board_t* board);
-
 /*Adds a file ghost(monster) to the board*/
-void load_file_ghost(board_t* board);
+void load_ghosts(board_t* board);
 
-
-/*Loads a static level into board*/
-int load_static_level(board_t *board, int points);
-
-/*Reads a file and processes it's instructions*/
-void read_file(board_t* board, char* filename, char* filetype, int num);
 
 /*Unloads levels loaded by load_level*/
 void unload_level(board_t * board);
