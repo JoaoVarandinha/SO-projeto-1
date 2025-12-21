@@ -2,6 +2,7 @@
 #define PARSER_H
 
 #include "board.h"
+#define MAX_INSTRUCTION_LENGTH 256
 
 int read_line(int fd, char* buf);
 void read_file(board_t* board, char* filename, char* filetype, int num);

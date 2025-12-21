@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
-#include <stdbool.h>
 #include <dirent.h>
 #include <string.h>
 #include <sys/types.h>
@@ -149,61 +148,6 @@ void *ghost_thread(void* arg) {
         }
         pthread_rwlock_unlock(&board->board_lock);
     }
-}
-
-int play_board(board_t* game_board) {
-    pacman_t* pacman = &game_board->pacmans[0];
-    command_t* play;
-    command_t c;
-
-    if (pacman->n_moves == 0) { // if is user input
-        c.command = get_input();
-
-        if (c.command == '\0')
-            return CONTINUE_PLAY;
-
-        c.turns = 1;
-        play = &c;
-    }
-    else { // else if the moves are pre-defined in the file
-        // avoid buffer overflow wrapping around with modulo of n_moves
-        // this ensures that we always access a valid move for the pacman
-        play = &pacman->moves[pacman->current_move%pacman->n_moves];
-    }
-
-    debug("KEY %c\n", play->command);
-
-    if (play->command == 'Q') {
-        return QUIT_GAME;
-    }
-
-    if (play->command == 'G') {
-        pacman->current_move++;
-        return CREATE_BACKUP;
-    }
-
-    int result = move_pacman(game_board, 0, play);
-    if (result == REACHED_PORTAL) {
-        // Next level
-        return NEXT_LEVEL;
-    }
-
-    if (result == DEAD_PACMAN) {
-        return QUIT_GAME;
-    }
-
-    for (int i = 0; i < game_board->n_ghosts; i++) {
-        ghost_t* ghost = &game_board->ghosts[i];
-        // avoid buffer overflow wrapping around with modulo of n_moves
-        // this ensures that we always access a valid move for the ghost
-        move_ghost(game_board, i, &ghost->moves[ghost->current_move%ghost->n_moves]);
-    }
-
-    if (!game_board->pacmans[0].alive) {
-        return QUIT_GAME;
-    }      
-
-    return CONTINUE_PLAY;  
 }
 
 int play_board_threads(board_t* board) {

@@ -6,15 +6,42 @@
 #include <fcntl.h>
 #include <string.h>
 
-
 int read_line(int fd, char* buf) {
-    
-    return 0;
+    char c;
+    ssize_t n;
+
+    while (1) {
+        int i = 0;
+
+        while ((n = read(fd, &c, 1)) == 1) {
+            if (c == '\r') continue;
+            if (c == '\n') break;
+
+            if (i < MAX_INSTRUCTION_LENGTH - 1)
+                buf[i++] = c;
+            else
+                // discard rest of long line
+                while (read(fd, &c, 1) == 1 && c != '\n');
+        }
+
+        if (n == -1) return -1;
+        if (n == 0 && i == 0) return 0;
+
+        buf[i] = '\0';
+
+        // skip empty lines
+        if (i == 0) continue;
+
+        // skip comment lines
+        if (buf[0] == '#' || buf[0] == '\0') continue;
+
+        return i;
+    }
 }
 
 void read_file(board_t* board, char* filename, char* filetype, int num) {
     //Go to correct directory and find the file before opening it
-    char dirfilename[MAX_FILENAME + MAX_DIRLENGTH];
+    char dirfilename[MAX_FILENAME + MAX_FILENAME];
     sprintf(dirfilename, "%s/%s", board->dir_name, filename);
 
     int fd = open(dirfilename, O_RDONLY);
@@ -24,9 +51,9 @@ void read_file(board_t* board, char* filename, char* filetype, int num) {
     }
 
     int bytesRead;
-    char buf[MAXLINELENGTH];
+    char buf[MAX_INSTRUCTION_LENGTH];
 
-    while (bytesRead = read_line(fd, buf)) {
+    while ((bytesRead = read_line(fd, buf)) > 0) {
         process_instruction(board, buf, filetype, &num);
     }
 
@@ -34,8 +61,6 @@ void read_file(board_t* board, char* filename, char* filetype, int num) {
 }
 
 void process_instruction(board_t* board, char* instruction, char* filetype, int* num) {
-    if (instruction[0] == '#' || strcmp(instruction, "") == 0) return;
-
     switch (filetype[1]) {
         case 'l': process_level_instruction(board, instruction, num); return;
         case 'p': process_pacman_instruction(board, instruction); return;
@@ -45,7 +70,6 @@ void process_instruction(board_t* board, char* instruction, char* filetype, int*
 
 void process_level_instruction(board_t* board, char* instruction, int* num) {
     switch (instruction[0]) {
-
         case 'D': {
             sscanf(instruction, "DIM %d %d", &board->width, &board->height);
             board->board = calloc(board->width * board->height, sizeof(board_pos_t));
@@ -59,6 +83,7 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
 
         case 'P': {
             sscanf(instruction, "PAC %s", board->pacman_file);
+            board->n_pacmans = 1;
             return;
         }   
 
@@ -81,10 +106,10 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
                     case 'X': board->board[(*num) * board->width + i].content = 'W';
                               break;
                     case 'o': board->board[(*num) * board->width + i].content = ' ';
-                              board->board[(*num) * board->width + i].has_dot = TRUE;
+                              board->board[(*num) * board->width + i].has_dot = 1;
                               break;
                     case '@': board->board[(*num) * board->width + i].content = ' ';
-                              board->board[(*num) * board->width + i].has_portal = TRUE;
+                              board->board[(*num) * board->width + i].has_portal = 1;
                               break;
                 }
             }
@@ -156,6 +181,5 @@ void process_ghost_instruction(board_t* board, char* instruction, int num) {
 
             return;
         }
-
     }
 }

@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <fcntl.h>
-#include <dirent.h>
 #include <string.h>
 
 FILE * debugfile;
@@ -457,8 +456,7 @@ void kill_pacman(board_t* board, int pacman_index) {
 
 
 void load_pacman(board_t* board, int points) {
-    board->n_pacmans = 1;
-    board->pacmans = calloc(board->n_pacmans, sizeof(pacman_t));
+    board->pacmans = calloc(1, sizeof(pacman_t));
     pacman_t* pac = &board->pacmans[0];
 
     pac->points = points;
@@ -467,6 +465,7 @@ void load_pacman(board_t* board, int points) {
 
     int idx;
     if (board->n_pacmans == 0) {
+        board->n_pacmans = 1;
         for (idx = 0; idx < board->width * board->height; idx++) {
             if (board->board[idx].content == ' ' && board->board[idx].has_dot) break;
         }

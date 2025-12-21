@@ -3,20 +3,16 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include <dirent.h>
-#include <pthread.h>
-
 #define MAX_MOVES 20
 #define MAX_LEVELS 20
 #define MAX_FILENAME 256
 #define MAX_GHOSTS 25
 #define MAXLINELENGTH 256
-#define MAX_DIRLENGTH 256
 #define LEVEL ".lvl"
 #define PACMAN ".p"
 #define GHOST ".m"
-#define TRUE 1
-#define FALSE 0
+
+#include <pthread.h>
 
 typedef enum {
     REACHED_PORTAL = 1,
@@ -70,7 +66,7 @@ typedef struct {
     char level_name[MAX_FILENAME];   //name for the level file to keep track of which will be the next
     char pacman_file[MAX_FILENAME];  // file with pacman movements
     char ghosts_files[MAX_GHOSTS][MAX_FILENAME]; // files with monster movements
-    char dir_name[MAX_DIRLENGTH];     // name of directory with info files
+    char dir_name[MAX_FILENAME];     // name of directory with info files
     int tempo;              // duration of each play
     pthread_rwlock_t board_lock; // global lock for the board
     int shutdown_threads;   // thread shutdown flag
@@ -89,16 +85,14 @@ int move_ghost(board_t* board, int ghost_index, command_t* command);
 void kill_pacman(board_t* board, int pacman_index);
 
 
-/*Adds a static pacman to the board*/
-void load_static_pacman(board_t* board);
-
 /*Adds a file pacman to the board*/
-void load_file_pacman(board_t* board, int points);
-
+void load_pacman(board_t* board, int points);
 
 /*Adds a file ghost(monster) to the board*/
 void load_ghosts(board_t* board);
 
+/*Loads the current level onto the board*/
+void load_level(board_t* board, char* filename);
 
 /*Unloads levels loaded by load_level*/
 void unload_level(board_t * board);
