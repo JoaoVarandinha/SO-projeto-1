@@ -300,7 +300,6 @@ int main(int argc, char** argv) {
 
             if (result == LOAD_BACKUP) {
                 if (pid == 0) {
-                    terminal_cleanup();
                     unload_level(&game_board);
                     exit(LOAD_BACKUP);
                 } else {
@@ -310,7 +309,6 @@ int main(int argc, char** argv) {
 
             if (result == QUIT_GAME) {
                 if (pid == 0) {
-                    terminal_cleanup();
                     unload_level(&game_board);
                     exit(QUIT_GAME);
                 }

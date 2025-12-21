@@ -170,6 +170,8 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
 
     *new_x = x;
     *new_y = y;
+
+    int result;
     
     switch (direction) {
         case 'W': // Up
@@ -184,11 +186,13 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
                 char target_content = board->board[get_board_index(board, x, i)].content;
                 if (target_content == 'W' || target_content == 'M') {
                     *new_y = i + 1; // stop before colision
-                    return VALID_MOVE;
+                    result = VALID_MOVE;
+                    break;
                 }
                 else if (target_content == 'P') {
                     *new_y = i;
-                    return find_and_kill_pacman(board, *new_x, *new_y);
+                    result = find_and_kill_pacman(board, *new_x, *new_y);
+                    break;
                 }
             }
             for (int i = 0; i <= y; i++) {
@@ -208,11 +212,13 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
                 char target_content = board->board[get_board_index(board, x, i)].content;
                 if (target_content == 'W' || target_content == 'M') {
                     *new_y = i - 1; // stop before colision
-                    return VALID_MOVE;
+                    result = VALID_MOVE;
+                    break;
                 }
                 if (target_content == 'P') {
                     *new_y = i;
-                    return find_and_kill_pacman(board, *new_x, *new_y);
+                    result = find_and_kill_pacman(board, *new_x, *new_y);
+                    break;
                 }
             }
             for (int i = y; i < board->height; i++) {
@@ -232,11 +238,13 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
                 char target_content = board->board[get_board_index(board, j, y)].content;
                 if (target_content == 'W' || target_content == 'M') {
                     *new_x = j + 1; // stop before colision
-                    return VALID_MOVE;
+                    result = VALID_MOVE;
+                    break;
                 }
                 if (target_content == 'P') {
                     *new_x = j;
-                    return find_and_kill_pacman(board, *new_x, *new_y);
+                    result = find_and_kill_pacman(board, *new_x, *new_y);
+                    break;
                 }
             }
             for (int j = 0; j <= x; j++) {
@@ -256,11 +264,13 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
                 char target_content = board->board[get_board_index(board, j, y)].content;
                 if (target_content == 'W' || target_content == 'M') {
                     *new_x = j - 1; // stop before colision
-                    return VALID_MOVE;
+                    result = VALID_MOVE;
+                    break;
                 }
                 if (target_content == 'P') {
                     *new_x = j;
-                    return find_and_kill_pacman(board, *new_x, *new_y);
+                    result = find_and_kill_pacman(board, *new_x, *new_y);
+                    break;
                 }
             }
             for (int j = x; j < board->width; j++) {
@@ -271,7 +281,7 @@ static int move_ghost_charged_direction(board_t* board, ghost_t* ghost, char dir
             debug("DEFAULT CHARGED MOVE - direction = %c\n", direction);
             return INVALID_MOVE;
     }
-    return VALID_MOVE;
+    return result;
 }   
 
 int move_ghost_charged(board_t* board, int ghost_index, char direction) {
@@ -288,7 +298,6 @@ int move_ghost_charged(board_t* board, int ghost_index, char direction) {
     int result = move_ghost_charged_direction(board, ghost, direction, &new_x, &new_y);
     if (result == INVALID_MOVE) {
         debug("DEFAULT CHARGED MOVE - direction = %c\n", direction);
-        pthread_rwlock_unlock(&board->board_lock);
         return INVALID_MOVE;
     }
 
