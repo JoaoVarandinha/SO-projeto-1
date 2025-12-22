@@ -7,7 +7,6 @@
 #define MAX_LEVELS 20
 #define MAX_FILENAME 256
 #define MAX_GHOSTS 25
-#define MAXLINELENGTH 256
 #define LEVEL ".lvl"
 #define PACMAN ".p"
 #define GHOST ".m"
