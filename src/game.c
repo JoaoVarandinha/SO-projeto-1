@@ -275,8 +275,8 @@ int main(int argc, char** argv) {
                                 continue;
                             }
                         } else {
-                        perror("Error waiting for child");
-                        exit(EXIT_FAILURE);
+                            perror("Error waiting for child");
+                            exit(EXIT_FAILURE);
                         }
                     }
                 }
