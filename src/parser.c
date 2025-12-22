@@ -16,21 +16,18 @@ int read_line(int fd, char* buf) {
         while ((n = read(fd, &c, 1)) == 1) {
             if (c == '\r') continue;
             if (c == '\n') break;
-
-            if (i < MAX_INSTRUCTION_LENGTH - 1)
-                buf[i++] = c;
-            else
-                // discard rest of long line
-                while (read(fd, &c, 1) == 1 && c != '\n');
+            if (c == '#') while (read(fd, &c, 1) == 1 && c != '\n');
+            buf[i++] = c;
         }
 
-        if (n == -1) return -1;
+        if (n == -1) {
+            perror("Error reading file");
+            exit(EXIT_FAILURE);
+        };
+
         if (n == 0 && i == 0) return 0;
 
         buf[i] = '\0';
-
-        // skip empty lines
-        if (i == 0) continue;
 
         // skip comment lines
         if (buf[0] == '#' || buf[0] == '\0') continue;
@@ -50,10 +47,9 @@ void read_file(board_t* board, char* filename, char* filetype, int num) {
         exit(EXIT_FAILURE);
     }
 
-    int bytesRead;
     char buf[MAX_INSTRUCTION_LENGTH];
 
-    while ((bytesRead = read_line(fd, buf)) > 0) {
+    while (read_line(fd, buf) > 0) {
         process_instruction(board, buf, filetype, &num);
     }
 
