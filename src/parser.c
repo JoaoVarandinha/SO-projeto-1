@@ -16,7 +16,10 @@ int read_line(int fd, char* buf) {
         while ((n = read(fd, &c, 1)) == 1) {
             if (c == '\r') continue;
             if (c == '\n') break;
-            if (c == '#') while (read(fd, &c, 1) == 1 && c != '\n');
+            if (c == '#') {
+                while (read(fd, &c, 1) == 1 && c != '\n');
+                continue;
+            }
             buf[i++] = c;
         }
 
@@ -27,10 +30,10 @@ int read_line(int fd, char* buf) {
 
         if (n == 0 && i == 0) return 0;
 
+        // skip empty lines
+        if (i == 0) continue;
+        
         buf[i] = '\0';
-
-        // skip comment lines
-        if (buf[0] == '#' || buf[0] == '\0') continue;
 
         return i;
     }
