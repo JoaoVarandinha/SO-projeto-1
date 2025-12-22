@@ -29,12 +29,9 @@ void screen_refresh(board_t * game_board, int mode) {
 int pacman_alive(board_t* board) {
     pacman_t* pacman = &board->pacmans[0];
     pthread_mutex_lock(&pacman->pac_lock);
-    if (pacman->alive) {
-        pthread_mutex_unlock(&pacman->pac_lock);
-        return 1;
-    }
+    int status = pacman->alive;
     pthread_mutex_unlock(&pacman->pac_lock);
-    return 0;
+    return status;
 }
 
 void *display_thread(void* arg) {
@@ -156,7 +153,7 @@ int play_board_threads(board_t* board) {
     board->shutdown_threads = 0;
 
     pthread_create(&display_tid, NULL, display_thread, board);
-    pthread_create(&pac_tid, NULL, pacman_thread, board); //Start pacman thread
+    pthread_create(&pac_tid, NULL, pacman_thread, board);
     for (int i = 0; i < board->n_ghosts; i++) {
         ghost_thread_args* args = calloc(1, sizeof(*args));
 
