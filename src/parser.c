@@ -88,14 +88,10 @@ void process_level_instruction(board_t* board, char* instruction, int* num) {
         }   
 
         case 'M': {
-            int counter = 0;
             char* filename = strtok(instruction, " ");
             while ((filename = strtok(NULL, " ")) != NULL) {
-                strcpy(board->ghosts_files[counter], filename);
-                counter++;
+                strcpy(board->ghosts_files[board->n_ghosts++], filename);
             }
-
-            board->n_ghosts = counter;
             return;
         }
 
